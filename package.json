@@ -1,5 +1,5 @@
 {
-  "name": "org-gererator",
+  "name": "org-generator",
   "private": true,
   "version": "0.2.0",
   "description": "Standalone web tool for modeling and exporting organization charts.",

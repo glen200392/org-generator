@@ -63,7 +63,7 @@ For the current validation gap analysis, see [docs/VALIDATION_STATUS.md](docs/VA
 This project is intended for GitHub Pages deployment.
 
 - Production URL (after Pages is enabled):
-  `https://glen200392.github.io/org-gererator/`
+  `https://glen200392.github.io/org-generator/`
 
 ## Automation
 

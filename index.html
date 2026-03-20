@@ -2,18 +2,19 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>企業組織圖產生器</title>
-    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/libs/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/libs/jszip.min.js" integrity="sha384-GqwAsTPHum87xO08VjTFtZOGiM4wmegRixncBMK4GndU97tH5zV8TqBh65S56JWz" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" integrity="sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module" integrity="sha384-fzqD3KLclV6zyTSuToNuSG370CipiqN572vfT2zti7ORKnQPaJrvsz8deY+/Tgwe" crossorigin="anonymous"></script>
     <script type="module">
         import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
         window.pdfjsLib = pdfjsLib;
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" integrity="sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F" crossorigin="anonymous"></script>
     <style>
         * { box-sizing: border-box; }
         body { font-family: "Microsoft JhengHei","PingFang TC","Helvetica Neue",sans-serif; padding: 0; margin: 0; background: #f0f2f5; min-height: 100vh; display: flex; flex-direction: column; overflow-y: auto; }
@@ -867,7 +868,7 @@ function escapeHtml(text){
     return String(text).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 function escapeJs(text){
-    return String(text).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return String(text).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/</g,'\\x3c');
 }
 function editorSheetLabel(sheet){
     const key='sheet'+sheet;
@@ -1091,7 +1092,14 @@ function createIssue(severity, code, lineNo){
     return {severity, code, lineNo};
 }
 function cloneRows(rows){
-    return rows.map(row=>({...row}));
+    const BANNED_KEYS=['__proto__','constructor','prototype'];
+    return rows.map(row=>{
+        const clean={};
+        for(const k of Object.keys(row)){
+            if(!BANNED_KEYS.includes(k)) clean[k]=row[k];
+        }
+        return clean;
+    });
 }
 function normalizeBool(v, fallback=true){
     if(v === '' || v === null || v === undefined) return fallback;
@@ -3197,7 +3205,9 @@ async function extractPdfTextsWithOcr(arrayBuffer){
     return [...new Set(collected.filter(text=>/[A-Za-z\u4e00-\u9fff]/.test(text)))];
 }
 async function handlePptUpload(){
+    try{
     const f=document.getElementById('pptUpload').files[0]; if(!f) return;
+    if(f.size>20*1024*1024){alert(t('fileTooLarge')||'File exceeds 20 MB limit.');return;}
     const arrayBuffer=await f.arrayBuffer();
     const zip=await JSZip.loadAsync(arrayBuffer);
     let payload=null;
@@ -3217,9 +3227,12 @@ async function handlePptUpload(){
         return;
     }
     alert(t('warnPptDraft'));
+    }catch(e){console.error('PPT upload error:',e);alert(t('uploadError')||'Failed to read PPT file.');}
 }
 async function handlePdfUpload(){
+    try{
     const f=document.getElementById('pdfUpload').files[0]; if(!f) return;
+    if(f.size>20*1024*1024){alert(t('fileTooLarge')||'File exceeds 20 MB limit.');return;}
     const arrayBuffer=await f.arrayBuffer();
     const text=new TextDecoder('latin1').decode(arrayBuffer);
     const payload=extractMetadataPayload(text);
@@ -3238,6 +3251,7 @@ async function handlePdfUpload(){
         return;
     }
     alert(t('warnPdfDraft'));
+    }catch(e){console.error('PDF upload error:',e);alert(t('uploadError')||'Failed to read PDF file.');}
 }
 
 function handleExcelUpload(){

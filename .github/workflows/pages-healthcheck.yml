@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Check deployed page is reachable
         run: |
-          curl -fSL --retry 3 --retry-delay 3 https://glen200392.github.io/org-gererator/ -o page.html
+          curl -fSL --retry 3 --retry-delay 3 https://glen200392.github.io/org-generator/ -o page.html
 
       - name: Validate key content exists
         run: |

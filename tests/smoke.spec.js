@@ -45,7 +45,7 @@ async function uploadWorkbook(page) {
   });
 }
 
-test.describe('org gererator smoke', () => {
+test.describe('org generator smoke', () => {
   test('legacy sample and UI language switch work', async ({ page }) => {
     await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#previewCanvas');
