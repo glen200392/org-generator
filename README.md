@@ -18,10 +18,21 @@ A standalone web tool for generating enterprise organization charts from simple 
 
 ## Quick Start
 
-1. Open [index.html](index.html) in a modern browser.
-2. Load sample data or upload an Excel file.
-3. Adjust theme and layout.
-4. Export to the required format.
+### Option A: Use Online (GitHub Pages)
+
+Visit **https://glen200392.github.io/org-generator/** — no installation needed.
+
+### Option B: Download and Use Offline
+
+1. Download [`index.html`](index.html) (right-click → Save As, or click the file then click the download button).
+2. Open it in any modern browser (Chrome, Edge, Firefox).
+3. Done. No server, no install, no dependencies required.
+
+### Then
+
+1. Load sample data or upload an Excel file.
+2. Adjust theme and layout.
+3. Export to PNG, PDF, or PPTX.
 
 ## Local Development
 
