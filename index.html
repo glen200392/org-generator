@@ -1,0 +1,3389 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>企業組織圖產生器</title>
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/libs/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+    <script type="module">
+        import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+        window.pdfjsLib = pdfjsLib;
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: "Microsoft JhengHei","PingFang TC","Helvetica Neue",sans-serif; padding: 0; margin: 0; background: #f0f2f5; min-height: 100vh; display: flex; flex-direction: column; overflow-y: auto; }
+        .container { flex: 1; width: 100%; background: white; padding: 16px 24px; display: flex; flex-direction: column; min-height: 100vh; overflow: visible; }
+        
+        /* ── Header ── */
+        .header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #64FFDA; padding-bottom: 10px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+        .header-left { display: flex; align-items: center; gap: 8px; }
+        h2 { color: #0A192F; margin: 0; font-size: 20px; }
+        .header-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn-hd { background: #F8FAFC; color: #0A192F; border: 1px solid #CBD5E1; padding: 5px 11px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; white-space: nowrap; }
+        .btn-hd:hover { background: #E2E8F0; }
+        
+        /* ── Compact Upload Bar ── */
+        .upload-bar { display: flex; gap: 12px; align-items: center; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 7px 14px; margin-bottom: 10px; flex-wrap: wrap; flex-shrink: 0; }
+        .upload-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #1A365D; font-weight: bold; white-space: nowrap; }
+        .native-file-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+        .file-picker-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .file-trigger-btn { border: 1px solid #94A3B8; background: #FFFFFF; color: #0F172A; border-radius: 7px; padding: 6px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+        .file-trigger-btn:hover { background: #EFF6FF; }
+        .file-name-label { font-size: 12px; color: #475569; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+        .upload-divider { width: 1px; height: 22px; background: #CBD5E1; flex-shrink: 0; }
+        #logoPreview { max-width: 60px; max-height: 26px; display: none; }
+        
+        /* 文件語言專屬下拉選單 */
+        .doc-lang-select { padding: 4px 8px; border-radius: 4px; border: 1px solid #94A3B8; font-size: 12px; background: white; cursor: pointer; color: #0A192F; font-weight: bold; }
+        
+        /* ── Theme Panel ── */
+        .theme-panel { background: linear-gradient(135deg, #0A192F 0%, #1A365D 100%); border-radius: 8px; padding: 9px 16px; margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; flex-shrink: 0; }
+        .theme-panel-label { color: #64FFDA; font-weight: bold; font-size: 14px; white-space: nowrap; }
+        .theme-select { padding: 7px 12px; border-radius: 6px; border: 2px solid #64FFDA; font-size: 13px; background: #0A192F; color: #fff; cursor: pointer; font-weight: bold; }
+        .swatch-row { display: flex; gap: 4px; align-items: center; }
+        .swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); }
+        .swatch-hint { font-size: 11px; color: #94A3B8; margin-left: 4px; }
+        .btn-sample { background: rgba(255,255,255,0.1); color: #E2E8F0; border: 1px solid rgba(255,255,255,0.3); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+        .btn-sample:hover { background: rgba(255,255,255,0.2); }
+        
+        /* ── Collapsible Data Area ── */
+        .collapse-section { margin-bottom: 10px; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+        .collapse-header { display: flex; justify-content: space-between; align-items: center; padding: 7px 14px; background: #F8FAFC; cursor: pointer; user-select: none; }
+        .collapse-header:hover { background: #EEF2F7; }
+        .collapse-title { font-weight: bold; color: #1E293B; font-size: 13px; }
+        .collapse-arrow { color: #64748B; font-size: 13px; transition: transform 0.25s; }
+        .collapse-arrow.open { transform: rotate(180deg); }
+        .collapse-body { display: none; padding: 10px; }
+        .collapse-body.open { display: block; }
+        textarea { width: 100%; height: 140px; font-family: monospace; padding: 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 13px; background: #1E293B; color: #F8FAFC; line-height: 1.6; resize: vertical; }
+        textarea.v2-textarea-summary { height: 88px; background: #0F172A; color: #CBD5E1; }
+        
+        /* ── Preview Section ── */
+        .preview-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+        .preview-title { font-weight: bold; color: #1E293B; font-size: 14px; }
+        .preview-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .zoom-btn { background: #F1F5F9; border: 1px solid #CBD5E1; color: #334155; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 17px; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 1; }
+        .zoom-btn:hover { background: #E2E8F0; }
+        .zoom-label { font-size: 12px; color: #475569; min-width: 42px; text-align: center; font-weight: bold; }
+        .zoom-fit-btn { background: #F1F5F9; border: 1px solid #CBD5E1; color: #334155; padding: 4px 9px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .zoom-fit-btn:hover { background: #E2E8F0; }
+        .ppt-mode-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; }
+        .ppt-mode-select { padding: 4px 8px; border-radius: 6px; border: 1px solid #CBD5E1; font-size: 12px; background: white; cursor: pointer; }
+        
+        /* ── 預覽框 ── */
+        .preview-wrapper { flex: none; height: 80vh; min-height: 420px; overflow: hidden; background: #E8ECF0; border: 1px solid #CBD5E1; border-radius: 8px; margin-bottom: 12px; position: relative; cursor: grab; }
+        .preview-wrapper.grabbing { cursor: grabbing; user-select: none; }
+        .preview-inner { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+        #previewCanvas { display: block; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
+        .hint-text { font-size: 11px; color: #94A3B8; text-align: center; margin-bottom: 5px; flex-shrink: 0; }
+        .search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+        .search-input { flex: 1; min-width: 220px; padding: 8px 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 13px; color: #0F172A; background: white; }
+        .search-summary { font-size: 12px; color: #475569; font-weight: bold; }
+        .preview-mode-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+        .preview-mode-label { font-size: 12px; color: #334155; font-weight: bold; }
+        .validation-panel { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+        .validation-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+        .validation-title { font-size: 13px; font-weight: bold; color: #0F172A; }
+        .validation-summary { font-size: 12px; color: #475569; }
+        .validation-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+        .validation-item { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: #334155; background: white; border: 1px solid #E2E8F0; border-radius: 6px; padding: 7px 9px; }
+        .validation-badge { font-size: 11px; font-weight: bold; border-radius: 999px; padding: 2px 7px; white-space: nowrap; }
+        .validation-badge.error { background: #FEE2E2; color: #B91C1C; }
+        .validation-badge.warning { background: #FEF3C7; color: #B45309; }
+        .validation-meta { color: #64748B; white-space: nowrap; }
+        .mode-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,0.12); color: #E2E8F0; border: 1px solid rgba(255,255,255,0.28); font-size: 12px; font-weight: bold; }
+        .editor-panel { background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+        .editor-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .editor-title { font-size: 14px; font-weight: bold; color: #0F172A; }
+        .editor-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .editor-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .editor-tab { border: 1px solid #CBD5E1; background: #F8FAFC; color: #334155; padding: 6px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .editor-tab.active { background: #0A192F; color: #64FFDA; border-color: #0A192F; }
+        .editor-table-wrap { overflow: auto; max-height: 360px; border: 1px solid #E2E8F0; border-radius: 8px; }
+        .editor-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 960px; }
+        .editor-table th { position: sticky; top: 0; background: #0F172A; color: white; text-align: left; padding: 8px; z-index: 1; }
+        .editor-table td { border-top: 1px solid #E2E8F0; padding: 6px; background: white; }
+        .editor-table tr.selected td { background: #ECFEFF; }
+        .editor-table input, .editor-table select { width: 100%; border: 1px solid #CBD5E1; border-radius: 6px; padding: 5px 6px; font-size: 12px; background: #fff; }
+        .editor-empty { padding: 16px; color: #64748B; font-size: 12px; text-align: center; }
+        .ghost-note { font-size: 11px; color: #64748B; }
+        .hierarchy-mapper-panel { margin-top: 10px; border-top: 1px dashed #CBD5E1; padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+        .mapper-toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .mapper-summary { font-size: 12px; color: #334155; font-weight: bold; }
+        .mapper-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1180px; }
+        .mapper-table th { position: sticky; top: 0; background: #1E293B; color: white; text-align: left; padding: 8px; z-index: 1; }
+        .mapper-table td { border-top: 1px solid #E2E8F0; padding: 6px; background: white; vertical-align: top; }
+        .mapper-table tr.selected td { background: #ECFEFF; }
+        .mapper-level-cell { min-width: 160px; }
+        .mapper-empty { background: #F8FAFC; }
+        .mapper-path-btn { display: block; width: 100%; border: 1px solid #CBD5E1; border-radius: 8px; background: #F8FAFC; padding: 7px 8px; text-align: left; cursor: pointer; }
+        .mapper-path-btn.current { border-color: #0EA5E9; background: #E0F2FE; }
+        .mapper-path-btn.selected { border-color: #0F766E; background: #CCFBF1; }
+        .mapper-path-dept { display: block; font-weight: bold; color: #0F172A; }
+        .mapper-path-meta { display: block; font-size: 11px; color: #64748B; margin-top: 2px; }
+        .mapper-inline-input, .mapper-inline-select { width: 100%; border: 1px solid #CBD5E1; border-radius: 6px; padding: 5px 6px; font-size: 12px; background: white; }
+        .path-composer-panel { border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; padding: 12px; }
+        .path-composer-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .path-composer-title { font-size: 13px; font-weight: bold; color: #0F172A; }
+        .path-composer-hint { font-size: 11px; color: #64748B; }
+        .path-composer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+        .path-composer-cell { border: 1px solid #D9E2EC; border-radius: 10px; background: white; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .path-composer-level { font-size: 12px; font-weight: bold; color: #1E293B; }
+        .path-composer-field { display: flex; flex-direction: column; gap: 4px; }
+        .path-composer-field span { font-size: 11px; color: #64748B; font-weight: bold; }
+        .path-composer-field input { border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 7px; font-size: 12px; background: #fff; color: #0F172A; }
+        .path-bulk-wrap { margin-top: 12px; border-top: 1px dashed #CBD5E1; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+        .path-bulk-title { font-size: 12px; font-weight: bold; color: #0F172A; }
+        .path-bulk-hint { font-size: 11px; color: #64748B; }
+        .path-bulk-textarea { width: 100%; min-height: 92px; border: 1px solid #CBD5E1; border-radius: 8px; padding: 10px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.5; background: #fff; color: #0F172A; resize: vertical; }
+        .property-panel { border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; padding: 12px; }
+        .property-header { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+        .property-title { font-size: 13px; font-weight: bold; color: #0F172A; }
+        .property-subtitle { font-size: 12px; color: #475569; }
+        .property-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+        .property-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #334155; font-weight: bold; }
+        .property-field input, .property-field select { border: 1px solid #CBD5E1; border-radius: 6px; padding: 7px 8px; font-size: 12px; background: white; color: #0F172A; }
+        .property-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        .relation-panel { margin-top: 12px; border-top: 1px dashed #CBD5E1; padding-top: 12px; }
+        .relation-title { font-size: 12px; font-weight: bold; color: #0F172A; margin-bottom: 8px; }
+        .relation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+        .relation-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+        .relation-item { display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 1px solid #E2E8F0; border-radius: 8px; background: white; padding: 8px 10px; font-size: 12px; color: #334155; }
+        .relation-item-meta { color: #64748B; }
+        .preview-selection-bar { display: none; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; padding: 8px 10px; border: 1px solid #BFDBFE; background: #EFF6FF; border-radius: 8px; }
+        .preview-selection-bar.active { display: flex; }
+        .preview-selection-title { font-size: 12px; color: #1E3A8A; font-weight: bold; }
+        .preview-selection-meta { font-size: 12px; color: #1D4ED8; }
+        .preview-context-menu { display: none; position: absolute; min-width: 180px; border: 1px solid #CBD5E1; border-radius: 10px; background: rgba(255,255,255,0.98); box-shadow: 0 10px 25px rgba(15,23,42,0.18); padding: 8px; z-index: 30; }
+        .preview-context-menu.open { display: block; }
+        .preview-context-title { font-size: 11px; color: #64748B; font-weight: bold; margin-bottom: 6px; }
+        .preview-context-menu button { display: block; width: 100%; text-align: left; border: none; background: transparent; color: #0F172A; border-radius: 8px; padding: 8px 10px; font-size: 12px; cursor: pointer; }
+        .preview-context-menu button:hover { background: #EFF6FF; }
+        .preview-node-toolbar { display: none; position: absolute; z-index: 28; background: rgba(255,255,255,0.98); border: 1px solid #CBD5E1; border-radius: 999px; padding: 6px; box-shadow: 0 10px 22px rgba(15,23,42,0.18); gap: 6px; align-items: center; }
+        .preview-node-toolbar.open { display: flex; }
+        .preview-node-toolbar button { border: none; background: #F8FAFC; color: #0F172A; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+        .preview-node-toolbar button:hover { background: #E2E8F0; }
+        .preview-node-toolbar button.toolbar-accent { background: #DBEAFE; color: #1D4ED8; }
+        .preview-node-toolbar button.toolbar-warn { background: #FEF3C7; color: #92400E; }
+        .preview-node-toolbar button.toolbar-danger { background: #FEE2E2; color: #B91C1C; }
+        .relation-batch-wrap { margin-top: 12px; border-top: 1px dashed #CBD5E1; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+        .relation-batch-title { font-size: 12px; font-weight: bold; color: #0F172A; }
+        .relation-batch-hint { font-size: 11px; color: #64748B; }
+        .relation-batch-textarea { width: 100%; min-height: 84px; border: 1px solid #CBD5E1; border-radius: 8px; padding: 10px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.5; background: #fff; color: #0F172A; resize: vertical; }
+
+        @media (max-width: 900px) {
+            .preview-wrapper { height: 72vh; min-height: 360px; }
+            .mapper-table { min-width: 980px; }
+        }
+        
+        /* ── Action Buttons ── */
+        .btn-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex-shrink: 0; }
+        button.action-btn { border: none; padding: 12px 6px; font-size: 13px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
+        .btn-preview { background: #F8FAFC; color: #0A192F; border: 2px solid #0A192F; }
+        .btn-preview:hover { background: #E2E8F0; }
+        .btn-png { background: #2B6CB0; color: white; }
+        .btn-png:hover { background: #2C5282; }
+        .btn-pdf { background: #E53E3E; color: white; }
+        .btn-pdf:hover { background: #C53030; }
+        .btn-ppt { background: #0A192F; color: #64FFDA; border: 2px solid #64FFDA; }
+        .btn-ppt:hover { background: #64FFDA; color: #0A192F; }
+        
+        /* ── Modals ── */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.open { display: flex; }
+        .modal-content { background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 600px; max-height: 88vh; overflow-y: auto; position: relative; box-shadow: 0 12px 30px rgba(0,0,0,0.2); }
+        .modal-content.sm { max-width: 460px; }
+        .close-btn { position: absolute; top: 12px; right: 14px; font-size: 18px; cursor: pointer; color: #64748B; border: none; background: transparent; }
+        .modal-title { color: #0A192F; margin: 0 0 14px; border-bottom: 2px solid #64FFDA; padding-bottom: 8px; font-size: 17px; }
+        .manual-section { margin-bottom: 16px; }
+        .manual-section h4 { color: #1A365D; font-size: 14px; margin: 0 0 6px; border-left: 3px solid #64FFDA; padding-left: 8px; }
+        .manual-section p, .manual-section li { color: #334155; font-size: 13px; line-height: 1.75; margin: 0; }
+        .manual-section ul { padding-left: 18px; margin: 4px 0; }
+        .manual-section .tag { display: inline-block; background: #EFF6FF; color: #1D4ED8; border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: bold; margin-right: 3px; }
+        .tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+        .tbl th { background: #0A192F; color: white; padding: 5px 8px; text-align: left; }
+        .tbl td { border: 1px solid #E2E8F0; padding: 5px 8px; color: #334155; }
+        .tbl tr:nth-child(even) td { background: #F8FAFC; }
+        .excel-preview-tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+        .excel-preview-tbl th { background: #0A192F; color: white; padding: 6px 10px; text-align: center; }
+        .excel-preview-tbl td { border: 1px solid #E2E8F0; padding: 5px 8px; text-align: center; font-family: monospace; }
+        .excel-preview-tbl tr:nth-child(even) td { background: #F8FAFC; }
+        .notice-box { background: #F0FDF4; border: 1px solid #86EFAC; border-radius: 7px; padding: 8px 12px; font-size: 12px; color: #166534; margin-bottom: 10px; }
+        .dl-btn { display: block; width: 100%; padding: 11px; background: #1B3F6E; color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+        .dl-btn:hover { background: #2B63A8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-row">
+        <div class="header-left">
+            <h2>📊 <span data-i18n="appTitle">企業組織圖產生器</span></h2>
+        </div>
+        <div class="header-btns">
+            <button class="btn-hd" onclick="openManual()">📖 <span data-i18n="btnManual">使用手冊</span></button>
+            <button class="btn-hd" onclick="openExcelModal()">📥 <span data-i18n="btnExcelTemplate">Excel 範本</span></button>
+            <button class="btn-hd" onclick="toggleUILang()" id="langBtn">🌐 EN (UI)</button>
+        </div>
+    </div>
+
+    <div class="upload-bar">
+        <div class="upload-item">
+            <span data-i18n="upExcel">📁 Excel 資料</span>
+            <div class="file-picker-row">
+                <input type="file" class="native-file-input" id="excelUpload" accept=".xlsx,.xls" onchange="updateFileInputLabel('excelUpload'); handleExcelUpload()">
+                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('excelUpload')" data-i18n="chooseFile">選擇檔案</button>
+                <span class="file-name-label" id="excelUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+            </div>
+        </div>
+        <div class="upload-divider"></div>
+        <div class="upload-item">
+            <span data-i18n="upPptImport">📎 回讀 PPT</span>
+            <div class="file-picker-row">
+                <input type="file" class="native-file-input" id="pptUpload" accept=".pptx" onchange="updateFileInputLabel('pptUpload'); handlePptUpload()">
+                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('pptUpload')" data-i18n="chooseFile">選擇檔案</button>
+                <span class="file-name-label" id="pptUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+            </div>
+        </div>
+        <div class="upload-divider"></div>
+        <div class="upload-item">
+            <span data-i18n="upPdfImport">📎 回讀 PDF</span>
+            <div class="file-picker-row">
+                <input type="file" class="native-file-input" id="pdfUpload" accept=".pdf" onchange="updateFileInputLabel('pdfUpload'); handlePdfUpload()">
+                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('pdfUpload')" data-i18n="chooseFile">選擇檔案</button>
+                <span class="file-name-label" id="pdfUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+            </div>
+        </div>
+        <div class="upload-divider"></div>
+        <div class="upload-item">
+            <span data-i18n="upLogo">🖼️ Logo（選填）</span>
+            <div class="file-picker-row">
+                <input type="file" class="native-file-input" id="logoUpload" accept="image/png,image/jpeg" onchange="updateFileInputLabel('logoUpload'); handleLogoUpload()">
+                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('logoUpload')" data-i18n="chooseFile">選擇檔案</button>
+                <span class="file-name-label" id="logoUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+            </div>
+            <img id="logoPreview" alt="logo">
+        </div>
+        <div class="upload-divider"></div>
+        <div class="upload-item">
+            <span data-i18n="upDocLang">📄 輸出內容語言</span>
+            <select id="docLangSelect" class="doc-lang-select" onchange="changeDocLang()">
+                <option value="tw">繁體中文</option>
+                <option value="en">English</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="theme-panel">
+        <span class="theme-panel-label" data-i18n="themeLabel">🎨 品牌主題</span>
+        <select id="themeSelect" class="theme-select" onchange="applyThemeAndPreview()">
+            <option value="blue" data-i18n="themeBlue">🔵 科技深藍（預設）</option>
+            <option value="gray" data-i18n="themeGray">⚪ 商務灰</option>
+            <option value="orange" data-i18n="themeOrange">🟠 活力橘</option>
+            <option value="primax" data-i18n="themePrimax">🩵 致伸科技青綠</option>
+            <option value="tymphany" data-i18n="themeTymphany">🔷 迪芬尼海軍藍</option>
+            <option value="white" data-i18n="themeWhite">⬜ 全白簡約</option>
+            <option value="bw" data-i18n="themeBlackWhite">⬛ 黑框黑字</option>
+        </select>
+        <div class="swatch-row">
+            <div class="swatch" id="sw0"></div>
+            <div class="swatch" id="sw1"></div>
+            <div class="swatch" id="sw2"></div>
+            <div class="swatch" id="sw3"></div>
+            <div class="swatch" id="sw4"></div>
+            <span class="swatch-hint">L1→L5</span>
+        </div>
+        <span class="mode-badge" id="modeBadge">LEGACY</span>
+        <select id="exportModeSelect" class="theme-select" style="min-width:132px;" onchange="drawCanvasPreview(1)">
+            <option value="stable">Stable PPT</option>
+            <option value="styled">Styled PPT</option>
+        </select>
+        <button class="btn-sample" onclick="toggleLayoutEdit()" id="layoutEditBtn">✋ 版面微調 Off</button>
+        <button class="btn-sample" onclick="loadSample()" data-i18n="btnSample">💡 載入範例資料</button>
+    </div>
+
+    <div class="collapse-section">
+        <div class="collapse-header" onclick="toggleCollapse()">
+            <span class="collapse-title" id="collapseTitle" data-i18n="step3Title">📝 資料微調區（Level, Dept, Name, Title）</span>
+            <span class="collapse-arrow" id="collapseArrow">▼</span>
+        </div>
+        <div class="collapse-body" id="collapseBody">
+            <textarea id="dataInput">
+1, 總公司, 王大明, CEO
+2, 產品技術處, 陳小華, 技術長
+3, 軟體開發部, 林阿呆, 經理
+3, 系統維運部, 李大方, 經理
+2, 全球業務處, 張大帥, 營運長
+3, 國內業務, 孫六, 經理
+4, 北區組, 周七, 專員
+4, 中南區組, 吳八, 專員
+            3, 海外業務, 鄭九, 經理
+</textarea>
+            <div class="ghost-note" id="dataModeHint"></div>
+            <div class="hierarchy-mapper-panel" id="hierarchyMapperPanel" style="display:none;">
+                <div class="mapper-toolbar">
+                    <span class="mapper-summary" id="mapperSummary"></span>
+                    <div class="editor-actions">
+                        <button class="zoom-fit-btn" onclick="seedPathComposerFromSelected()" id="mapperSeedBtn"></button>
+                        <button class="zoom-fit-btn" onclick="addNodeRelative('root')" id="mapperAddRootBtn"></button>
+                        <button class="zoom-fit-btn" onclick="addNodeRelative('child')" id="mapperAddChildBtn"></button>
+                        <button class="zoom-fit-btn" onclick="addNodeRelative('sibling')" id="mapperAddSiblingBtn"></button>
+                        <button class="zoom-fit-btn" onclick="deleteSelectedNode()" id="mapperDeleteBtn"></button>
+                    </div>
+                </div>
+                <div class="path-composer-panel" id="pathComposerPanel"></div>
+                <div class="editor-table-wrap" id="hierarchyMapWrap"></div>
+                <div class="property-panel" id="nodePropertyPanel"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="validation-panel">
+        <div class="validation-header">
+            <span class="validation-title" id="validationTitle">資料檢查</span>
+            <span class="validation-summary" id="validationSummary"></span>
+        </div>
+        <div class="validation-list" id="validationList"></div>
+    </div>
+
+    <div class="editor-panel" id="editorPanel" style="display:none;">
+        <div class="editor-header">
+            <span class="editor-title" id="editorTitle">Workbook Editor</span>
+            <div class="editor-actions">
+                <button class="zoom-fit-btn" onclick="addEditorRow()" id="addRowBtn"></button>
+                <button class="zoom-fit-btn" onclick="downloadWorkbookV2()" id="saveWorkbookBtn"></button>
+            </div>
+        </div>
+        <div class="editor-tabs" id="editorTabs"></div>
+        <div class="ghost-note" id="editorHint"></div>
+        <div class="editor-table-wrap" id="editorTableWrap"></div>
+    </div>
+
+    <div class="preview-section">
+        <div class="preview-header">
+            <span class="preview-title" data-i18n="step4Title">👁️ 即時預覽</span>
+            <div class="preview-controls">
+                <button class="zoom-btn" onclick="zoom(-0.15)" title="縮小">−</button>
+                <span class="zoom-label" id="zoomLabel">100%</span>
+                <button class="zoom-btn" onclick="zoom(0.15)" title="放大">+</button>
+                <button class="zoom-fit-btn" onclick="zoomFit()" data-i18n="btnZoomFit">⊞ 適合</button>
+                <button class="zoom-fit-btn" onclick="zoomReset()">1:1</button>
+                <div style="width:1px;height:22px;background:#CBD5E1;"></div>
+                <div class="ppt-mode-row">
+                    <span data-i18n="pptModeLabel">PPT分頁：</span>
+                    <select id="pptModeSelect" class="ppt-mode-select">
+                        <option value="auto" data-i18n="pptModeAuto">🤖 自動</option>
+                        <option value="single" data-i18n="pptModeSingle">📄 整體單頁</option>
+                        <option value="dept" data-i18n="pptModeDept">🗂️ 選取部門</option>
+                    </select>
+                    <select id="deptSelect" class="ppt-mode-select" style="display:none;"></select>
+                </div>
+            </div>
+        </div>
+        <div class="preview-mode-row" id="previewModeRow" style="display:none;">
+            <span class="preview-mode-label" id="previewPageLabel"></span>
+            <select id="slideGroupSelect" class="ppt-mode-select" onchange="handleSlideGroupChange()"></select>
+            <span class="search-summary" id="previewModeSummary"></span>
+        </div>
+        <div class="search-row">
+            <input type="text" id="searchInput" class="search-input" oninput="handleSearchInput()" />
+            <button class="zoom-fit-btn" onclick="clearSearch()" id="searchClearBtn"></button>
+            <span class="search-summary" id="searchSummary"></span>
+        </div>
+        <div class="hint-text" id="previewHintText" data-i18n="previewHint">💡 滾輪縮放 · 拖曳平移 · 點擊節點展開/收合</div>
+        <div class="preview-selection-bar" id="previewSelectionBar"></div>
+        <div class="preview-wrapper" id="previewWrapper">
+            <div class="preview-inner" id="previewInner">
+                <canvas id="previewCanvas"></canvas>
+            </div>
+            <div class="preview-node-toolbar" id="previewNodeToolbar"></div>
+            <div class="preview-context-menu" id="previewContextMenu"></div>
+        </div>
+        <div class="btn-group">
+            <button class="action-btn btn-preview" onclick="drawCanvasPreview(1)" data-i18n="btnUpdate">🔄 更新預覽</button>
+            <button class="action-btn btn-png" onclick="downloadPNG()" data-i18n="btnPng">🖼️ 下載 PNG</button>
+            <button class="action-btn btn-pdf" onclick="downloadPDF()" data-i18n="btnPdf">📄 下載 PDF</button>
+            <button class="action-btn btn-ppt" onclick="generatePPT()" data-i18n="btnPpt">⬇️ 下載 PPT</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="manualModal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeModal('manualModal')">✖</button>
+        <h3 class="modal-title" data-i18n="manualTitle">📖 快速上手指南 (v3.1)</h3>
+        <div class="manual-section">
+            <h4 data-i18n="m1h">🚀 操作流程</h4>
+            <ul>
+                <li data-i18n="m1a">📥 下載 Excel 範本 → 填入 <strong>Level、Dept、Name、Title</strong></li>
+                <li data-i18n="m1b">📁 上傳 Excel → 資料自動載入</li>
+                <li data-i18n="m1c">🎨 選擇品牌主題 → 預覽即時更新</li>
+                <li data-i18n="m1d">🔍 滾輪縮放 / 拖曳平移瀏覽預覽</li>
+                <li data-i18n="m1e">⬇️ 匯出 PNG / PDF / PPT</li>
+            </ul>
+        </div>
+        <div class="manual-section">
+            <h4 data-i18n="m4h">🔍 縮放與平移</h4>
+            <ul>
+                <li data-i18n="m4a"><strong>滾輪</strong>：在預覽區滾動滑鼠縮放</li>
+                <li data-i18n="m4b"><strong>+/− 按鈕</strong>：每次 ±15%</li>
+                <li data-i18n="m4c"><strong>「適合」</strong>：整圖自動填滿預覽框</li>
+                <li data-i18n="m4d"><strong>「1:1」</strong>：還原 100% 原始尺寸</li>
+                <li data-i18n="m4e"><strong>拖曳</strong>：按住左鍵拖曳平移畫面</li>
+            </ul>
+        </div>
+        <div class="manual-section">
+            <h4 data-i18n="m5h">🗂️ PPT 分頁模式</h4>
+            <table class="tbl">
+                <tr><th data-i18n="mMode">模式</th><th data-i18n="mModeDesc">說明</th></tr>
+                <tr><td data-i18n="pptModeAuto">🤖 自動</td><td data-i18n="mMode1">偵測規模，過大自動切成總覽頁 + 各部門子頁</td></tr>
+                <tr><td data-i18n="pptModeSingle">📄 整體單頁</td><td data-i18n="mMode2">所有節點放同一頁</td></tr>
+                <tr><td data-i18n="pptModeDept">🗂️ 選取部門</td><td data-i18n="mMode3">只輸出所選部門子樹，適合單部門報告</td></tr>
+            </table>
+        </div>
+        <div class="manual-section">
+            <h4 data-i18n="m2h">📋 Excel 欄位（只需 4 欄）</h4>
+            <table class="tbl">
+                <tr><th data-i18n="mColField">欄位</th><th data-i18n="mColDesc">說明</th><th data-i18n="mColExample">範例</th></tr>
+                <tr><td>Level</td><td data-i18n="mLevelDesc">層級（1=根節點）</td><td>1, 2, 3…</td></tr>
+                <tr><td>Dept</td><td data-i18n="mDeptDesc">部門/單位名稱</td><td data-i18n="mDeptEx">總公司</td></tr>
+                <tr><td>Name</td><td data-i18n="mNameDesc">負責人姓名</td><td data-i18n="mNameEx">王大明</td></tr>
+                <tr><td>Title</td><td data-i18n="mTitleDesc">職稱</td><td data-i18n="mTitleEx">CEO</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="excelModal">
+    <div class="modal-content sm">
+        <button class="close-btn" onclick="closeModal('excelModal')">✖</button>
+        <h3 class="modal-title" data-i18n="excelModalTitle">📥 Excel 範本下載</h3>
+        <div class="notice-box" data-i18n="excelModalDesc">✅ 只需 4 欄，顏色在網頁選主題即可，不需填色碼</div>
+        <table class="excel-preview-tbl">
+            <tr><th>Level</th><th>Dept</th><th>Name</th><th>Title</th></tr>
+            <tr><td>1</td><td data-i18n="mDeptEx">總公司</td><td data-i18n="mNameEx">王大明</td><td data-i18n="mTitleEx">CEO</td></tr>
+            <tr><td>2</td><td data-i18n="sampleDeptSales">Sales</td><td data-i18n="sampleNameJohn">John</td><td data-i18n="sampleTitleVp">VP</td></tr>
+            <tr><td>3</td><td data-i18n="sampleDeptTeamA">Team A</td><td data-i18n="sampleNameAlice">Alice</td><td data-i18n="sampleTitleManager">Manager</td></tr>
+        </table>
+        <button class="dl-btn" onclick="downloadExcelTemplate()">⬇️ <span data-i18n="btnDownloadTemplate">下載 Excel 範本（.xlsx）</span></button>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// 🌍 i18n 雙軌語言系統 (UI vs Document)
+// ══════════════════════════════════════
+const UI_LANG_STORAGE_KEY='orgGeneratorUiLang';
+let uiLang = 'tw';
+let docLang = 'tw';
+
+const translations = {
+    tw: {
+        appTitle: "企業組織圖產生器", btnManual: "使用手冊", btnExcelTemplate: "Excel 範本",
+        upExcel: "📁 Excel 資料", upLogo: "🖼️ Logo（選填）", upDocLang: "📄 輸出內容語言",
+        upPptImport: "📎 回讀 PPT", upPdfImport: "📎 回讀 PDF", docLangTw: "繁體中文", docLangEn: "English",
+        chooseFile: "選擇檔案", noFileSelected: "未選擇任何檔案",
+        themeLabel: "🎨 品牌主題", themeDefault: "🎨 選擇色彩主題...",
+        themeBlue: "🔵 科技深藍（預設）", themeGray: "⚪ 商務灰", themeOrange: "🟠 活力橘",
+        themePrimax: "🩵 致伸科技青綠", themeTymphany: "🔷 迪芬尼海軍藍", themeWhite: "⬜ 全白簡約", themeBlackWhite: "⬛ 黑框黑字",
+        btnSample: "💡 載入範例資料", step3Title: "📝 資料微調區（Level, Dept, Name, Title）",
+        step3TitleLegacy: "📝 資料微調區（Level, Dept, Name, Title）",
+        step3TitleV2: "🧭 結構映射與資料微調區（V2 Workbook）",
+        step4Title: "👁️ 即時預覽", btnZoomFit: "⊞ 適合", zoomOutTitle: "縮小", zoomInTitle: "放大",
+        pptModeLabel: "PPT分頁：", pptModeAuto: "🤖 自動", pptModeSingle: "📄 整體單頁", pptModeDept: "🗂️ 選取部門",
+        previewHint: "💡 滾輪縮放 · 拖曳平移 · 點擊節點展開/收合",
+        previewHintLegacy: "💡 滾輪縮放 · 拖曳平移 · 點擊節點展開/收合",
+        previewHintV2: "💡 點擊節點可選取並同步資料區 · 版面微調 On 時可直接拖曳位置",
+        dataModeLegacyHint: "Legacy 模式直接編輯上方文字即可，格式為 Level, Dept, Name, Title。",
+        dataModeV2Hint: "V2 模式以上方摘要為唯讀，正式資料請在階層映射表、節點屬性與 Workbook 編輯區同步調整。",
+        btnUpdate: "🔄 更新預覽", btnPng: "🖼️ 下載 PNG", btnPdf: "📄 下載 PDF", btnPpt: "⬇️ 下載 PPT",
+        exportModeStable: "穩定 PPT", exportModeStyled: "美編 PPT",
+        
+        manualTitle: "📖 快速上手指南 (v3.1)",
+        m1h: "🚀 操作流程",
+        m1a: "📥 下載 Excel 範本 → 填入 <strong>Level、Dept、Name、Title</strong>",
+        m1b: "📁 上傳 Excel → 資料自動載入",
+        m1c: "🎨 選擇品牌主題 → 預覽即時更新",
+        m1d: "🔍 滾輪縮放 / 拖曳平移瀏覽預覽",
+        m1e: "⬇️ 匯出 PNG / PDF / PPT",
+        
+        m4h: "🔍 縮放與平移",
+        m4a: "<strong>滾輪</strong>：在預覽區滾動滑鼠縮放",
+        m4b: "<strong>+/− 按鈕</strong>：每次 ±15%",
+        m4c: "<strong>「適合」</strong>：整圖自動填滿預覽框",
+        m4d: "<strong>「1:1」</strong>：還原 100% 原始尺寸",
+        m4e: "<strong>拖曳</strong>：按住左鍵拖曳平移畫面",
+        
+        m5h: "🗂️ PPT 分頁模式", mMode: "模式", mModeDesc: "說明",
+        mMode1: "偵測規模，過大自動切成總覽頁 + 各部門子頁", mMode2: "所有節點放同一頁", mMode3: "只輸出所選部門子樹，適合單部門報告",
+        
+        m2h: "📋 Excel 欄位（只需 4 欄）", mColField: "欄位", mColDesc: "說明", mColExample: "範例",
+        mLevelDesc: "層級（1=根節點）", mDeptDesc: "部門/單位名稱", mNameDesc: "負責人姓名", mTitleDesc: "職稱",
+        mDeptEx: "總公司", mNameEx: "王大明", mTitleEx: "CEO",
+        sampleDeptSales: "業務處", sampleNameJohn: "王小明", sampleTitleVp: "副總",
+        sampleDeptTeamA: "A 組", sampleNameAlice: "陳小美", sampleTitleManager: "經理",
+        
+        excelModalTitle: "📥 Excel 範本下載",
+        excelModalDesc: "✅ 只需 4 欄，顏色在網頁選主題即可，不需填色碼",
+        btnDownloadTemplate: "下載 Excel 範本（.xlsx）",
+
+        searchPlaceholder: "搜尋部門、姓名或職稱",
+        searchClear: "清除搜尋",
+        searchSummaryIdle: "未啟用搜尋",
+        searchSummaryHits: "找到 {count} 筆相符節點",
+        searchSummaryMiss: "找不到相符節點",
+        validationTitle: "資料檢查",
+        validationOk: "資料格式正常，未發現問題",
+        validationIssues: "共 {count} 筆提醒（錯誤 {errors} / 警告 {warnings}）",
+        modeLegacy: "LEGACY 模式",
+        modeV2: "V2 Workbook 模式",
+        editorTitle: "Workbook 編輯區",
+        editorHint: "直接編輯表格會即時回寫 workbook，圖面拖拉會寫入 LayoutOverrides。",
+        addRow: "新增列",
+        saveWorkbook: "下載 Workbook",
+        layoutEditOff: "✋ 版面微調 Off",
+        layoutEditOn: "✋ 版面微調 On",
+        editorEmpty: "{sheet} 目前沒有資料列",
+        sheetNodes: "Nodes",
+        sheetEdges: "Edges",
+        sheetSlides: "Slides",
+        sheetLayoutOverrides: "LayoutOverrides",
+        mapperSummary: "目前頁群組 {pageGroup}，可見節點 {count} 個，層級 {depth} 層",
+        mapperEmpty: "目前頁面沒有可編輯的樹狀節點",
+        mapperLevel: "層級 {level}",
+        mapperNodeDept: "部門",
+        mapperNodeName: "姓名",
+        mapperNodeTitle: "職稱",
+        mapperRoleType: "角色",
+        mapperLayoutType: "排版",
+        mapperActions: "動作",
+        mapperSelectNode: "請先從預覽區或映射表選一個節點",
+        pathComposerTitle: "橫向路徑輸入",
+        pathComposerHint: "每一欄代表一層，填完後會沿著目前頁群組自動建立或接續節點。",
+        pathComposerDept: "Dept",
+        pathComposerName: "Name",
+        pathComposerJobTitle: "Title",
+        pathComposerApply: "套用路徑",
+        pathComposerClear: "清空路徑",
+        pathComposerSeed: "以選取節點展開",
+        pathComposerBatchTitle: "批次路徑貼上",
+        pathComposerBatchHint: "每列可用 Tab 三欄一層，或用 Dept|Name|Title > Dept|Name|Title 連接多層。",
+        pathComposerBatchPlaceholder: "總公司\t王大明\tCEO\t產品技術處\t陳小華\t技術長\r\n總公司|王大明|CEO > 全球業務處|張大帥|營運長 > 海外業務|鄭九|經理",
+        pathComposerBatchApply: "批次套用",
+        pathComposerBatchClear: "清空批次內容",
+        pathComposerBatchNoValid: "批次內容沒有可套用的有效路徑",
+        pathComposerBatchApplied: "已套用 {count} / {total} 條路徑",
+        addRoot: "＋新增根節點",
+        addChild: "＋新增子節點",
+        addSibling: "＋新增同層",
+        deleteNode: "刪除節點",
+        selectedNodeLabel: "目前選取",
+        selectedNodeNone: "尚未選取節點",
+        nodePropertiesTitle: "節點屬性",
+        nodeFieldNodeId: "NodeID",
+        nodeFieldParentId: "ParentID",
+        nodeFieldPageGroup: "PageGroup",
+        nodeFieldSortOrder: "SortOrder",
+        nodeFieldDept: "Dept",
+        nodeFieldName: "Name",
+        nodeFieldTitle: "Title",
+        nodeFieldRoleType: "RoleType",
+        nodeFieldLayoutType: "LayoutType",
+        nodeFieldColor: "Color",
+        relationTitle: "特殊關係 / 虛線匯報",
+        relationTarget: "目標節點",
+        relationType: "關係類型",
+        relationScope: "顯示範圍",
+        relationLabel: "標籤",
+        relationAddBtn: "加入關係",
+        relationDelete: "刪除",
+        relationEmpty: "目前選取節點沒有特殊關係",
+        relationBatchTitle: "批次特殊關係",
+        relationBatchHint: "可貼上 TargetID、TargetID|dotted|local|標籤，或完整 FromID|ToID|dotted|local|標籤。",
+        relationBatchPlaceholder: "SALES_HEAD\r\nCTO|SALES_HEAD|dotted|cross-page|支援",
+        relationBatchApply: "批次加入關係",
+        relationBatchClear: "清空關係批次",
+        relationBatchNoValid: "批次內容沒有可加入的有效關係",
+        relationBatchApplied: "已加入 {count} / {total} 條關係",
+        previewSelectionPrefix: "預覽選取",
+        previewSelectionHint: "以預覽為最終呈現，資料區和畫布同步回寫同一份 V2 workbook。",
+        previewContextTitle: "預覽快捷操作",
+        previewContextSeed: "展開到路徑輸入",
+        previewContextAddChild: "新增子節點",
+        previewContextAddSibling: "新增同層",
+        previewContextPickRelation: "挑選虛線目標",
+        previewContextCollapse: "收合子樹",
+        previewContextExpand: "展開子樹",
+        previewContextDelete: "刪除節點",
+        previewToolbarPickRelation: "虛線",
+        previewToolbarPickCancel: "取消虛線",
+        previewRelationPickHint: "虛線挑選中：請在預覽點另一個節點作為目標",
+        newNodeDept: "新部門",
+        newNodeName: "新成員",
+        newNodeTitle: "職稱",
+        warnCycleParent: "ParentID 不能指向自己或自己的子節點",
+        previewPageLabel: "預覽頁群組",
+        previewModeLegacy: "目前使用單頁樹狀預覽",
+        previewModeV2: "V2 活頁預覽，共 {count} 個頁群組",
+        severityError: "錯誤",
+        severityWarning: "警告",
+        issueLine: "第 {line} 行",
+        emptyCanvas: "目前沒有可繪製的有效資料",
+        errColumns: "欄位不足，請使用 Level, Dept, Name, Title[, Color]",
+        errLevel: "Level 必須是大於 0 的整數",
+        errNodesSheet: "找不到 Nodes 工作表",
+        errSlidesSheet: "找不到 Slides 工作表",
+        errNodeId: "NodeID 不可空白，且必須唯一",
+        errParentRef: "ParentID 找不到對應的 NodeID",
+        errPageGroup: "PageGroup 找不到對應的 Slides 定義",
+        errSlideRoot: "Slides 的 RootNodeID 找不到對應節點",
+        errEdgeRef: "Edges 參照不到有效節點",
+        warnDraftImport: "這是草稿導入結果，請先人工確認再當正式資料使用",
+        warnPdfDraft: "PDF 未找到內嵌 metadata，目前只支援自家輸出的高可靠回編",
+        warnPptDraft: "PPT 未找到內嵌 metadata，目前只支援自家輸出的高可靠回編",
+        workbookLoaded: "# 已載入 V2 workbook",
+        workbookSlides: "# Slides: {count}",
+        workbookHint: "# 若要修改 V2 資料，請編輯上方 workbook 表格，或重新匯入 Excel。",
+        crossRefShort: "參照",
+        vacantPrefix: "[空缺]",
+        draftRootTitle: "匯入根節點",
+        draftImportNodeTitle: "草稿導入",
+        pptDraftSource: "PPT 草稿",
+        pdfDraftSource: "PDF 草稿",
+        warnRootFallback: "找不到上層節點，已暫時當成根節點處理",
+        warnLevelJump: "層級中間有缺層，已掛到最近的上層節點",
+        warnMissingDept: "Dept 為空白",
+        warnMissingName: "Name 為空白",
+        warnMissingTitle: "Title 為空白",
+        warnDuplicate: "Dept / Name / Title 與其他節點重複，建議確認是否需要唯一識別",
+        
+        // Document Level Translations
+        slideTitleObj: "企業組織架構圖",
+        slideTitleOverview: "企業組織架構圖 - 高階總覽",
+        slideTitleDept: "部門架構圖 - "
+    },
+    en: {
+        appTitle: "Corporate Org Chart Generator", btnManual: "User Guide", btnExcelTemplate: "Template",
+        upExcel: "📁 Excel Data", upLogo: "🖼️ Logo (Opt)", upDocLang: "📄 Content Lang",
+        upPptImport: "📎 Import PPT", upPdfImport: "📎 Import PDF", docLangTw: "Traditional Chinese", docLangEn: "English",
+        chooseFile: "Choose File", noFileSelected: "No file selected",
+        themeLabel: "🎨 Theme", themeDefault: "🎨 Select Theme...",
+        themeBlue: "🔵 Tech Blue (Def)", themeGray: "⚪ Biz Gray", themeOrange: "🟠 Warm Orange",
+        themePrimax: "🩵 PRIMAX Teal", themeTymphany: "🔷 Tymphany Navy", themeWhite: "⬜ Clean White", themeBlackWhite: "⬛ B & W",
+        btnSample: "💡 Load Sample", step3Title: "📝 Data Editor (Level, Dept, Name, Title)",
+        step3TitleLegacy: "📝 Data Editor (Level, Dept, Name, Title)",
+        step3TitleV2: "🧭 Structure Mapping & Data Editing (V2 Workbook)",
+        step4Title: "👁️ Live Preview", btnZoomFit: "⊞ Fit", zoomOutTitle: "Zoom out", zoomInTitle: "Zoom in",
+        pptModeLabel: "PPT Mode:", pptModeAuto: "🤖 Auto", pptModeSingle: "📄 Single Page", pptModeDept: "🗂️ By Dept",
+        previewHint: "💡 Scroll to zoom · Drag to pan · Click node to toggle",
+        previewHintLegacy: "💡 Scroll to zoom · Drag to pan · Click node to toggle",
+        previewHintV2: "💡 Click a node to sync the data panel. Turn Layout Edit On to drag positions directly.",
+        dataModeLegacyHint: "In Legacy mode, edit the text area directly using Level, Dept, Name, Title.",
+        dataModeV2Hint: "In V2 mode, the summary above is read-only. Edit the hierarchy map, node properties, and workbook grid instead.",
+        btnUpdate: "🔄 Update", btnPng: "🖼️ Save PNG", btnPdf: "📄 Save PDF", btnPpt: "⬇️ Save PPT",
+        exportModeStable: "Stable PPT", exportModeStyled: "Styled PPT",
+        
+        manualTitle: "📖 Quick Start Guide (v3.1)",
+        m1h: "🚀 Workflow",
+        m1a: "📥 Download Template → Fill in <strong>Level, Dept, Name, Title</strong>",
+        m1b: "📁 Upload Excel → Auto loads data",
+        m1c: "🎨 Select Theme → Instant preview",
+        m1d: "🔍 Scroll/Drag to navigate preview",
+        m1e: "⬇️ Export as PNG / PDF / PPT",
+        
+        m4h: "🔍 Navigation",
+        m4a: "<strong>Scroll</strong>: Mouse wheel to zoom",
+        m4b: "<strong>+/−</strong>: Zoom ±15%",
+        m4c: "<strong>Fit</strong>: Auto fit to screen",
+        m4d: "<strong>1:1</strong>: Actual size",
+        m4e: "<strong>Drag</strong>: Left click and hold to pan",
+        
+        m5h: "🗂️ PPT Pagination", mMode: "Mode", mModeDesc: "Description",
+        mMode1: "Auto splits into Overview + Sub-departments if too large", mMode2: "Forces all nodes onto one slide", mMode3: "Exports only the selected sub-tree",
+        
+        m2h: "📋 Excel Columns (Only 4 needed)", mColField: "Col", mColDesc: "Description", mColExample: "Example",
+        mLevelDesc: "Hierarchy (1=root)", mDeptDesc: "Dept/Unit Name", mNameDesc: "Person in charge", mTitleDesc: "Job Title",
+        mDeptEx: "Headquarters", mNameEx: "John Doe", mTitleEx: "CEO",
+        sampleDeptSales: "Sales", sampleNameJohn: "John", sampleTitleVp: "VP",
+        sampleDeptTeamA: "Team A", sampleNameAlice: "Alice", sampleTitleManager: "Manager",
+        
+        excelModalTitle: "📥 Download Template",
+        excelModalDesc: "✅ Only 4 columns required. Colors are applied via web UI.",
+        btnDownloadTemplate: "Download Template (.xlsx)",
+
+        searchPlaceholder: "Search by dept, name, or title",
+        searchClear: "Clear Search",
+        searchSummaryIdle: "Search is idle",
+        searchSummaryHits: "{count} matching nodes found",
+        searchSummaryMiss: "No matching nodes found",
+        validationTitle: "Data Check",
+        validationOk: "Data looks valid. No issues found.",
+        validationIssues: "{count} notices (errors {errors} / warnings {warnings})",
+        modeLegacy: "LEGACY mode",
+        modeV2: "V2 workbook mode",
+        editorTitle: "Workbook Editor",
+        editorHint: "Grid edits write directly to the workbook model; canvas dragging writes LayoutOverrides.",
+        addRow: "Add Row",
+        saveWorkbook: "Download Workbook",
+        layoutEditOff: "✋ Layout Edit Off",
+        layoutEditOn: "✋ Layout Edit On",
+        editorEmpty: "{sheet} is empty",
+        sheetNodes: "Nodes",
+        sheetEdges: "Edges",
+        sheetSlides: "Slides",
+        sheetLayoutOverrides: "LayoutOverrides",
+        mapperSummary: "Page group {pageGroup} with {count} visible nodes across {depth} levels",
+        mapperEmpty: "No editable tree nodes are visible on this page",
+        mapperLevel: "Level {level}",
+        mapperNodeDept: "Dept",
+        mapperNodeName: "Name",
+        mapperNodeTitle: "Title",
+        mapperRoleType: "Role",
+        mapperLayoutType: "Layout",
+        mapperActions: "Actions",
+        mapperSelectNode: "Select a node from the preview or the hierarchy map first",
+        pathComposerTitle: "Horizontal Path Entry",
+        pathComposerHint: "Each column represents one hierarchy level. Applying the row will build or reuse nodes in the current page group.",
+        pathComposerDept: "Dept",
+        pathComposerName: "Name",
+        pathComposerJobTitle: "Title",
+        pathComposerApply: "Apply Path",
+        pathComposerClear: "Clear Path",
+        pathComposerSeed: "Seed From Selected",
+        pathComposerBatchTitle: "Batch Path Paste",
+        pathComposerBatchHint: "Use tab-separated triplets per level, or chain levels as Dept|Name|Title > Dept|Name|Title.",
+        pathComposerBatchPlaceholder: "HQ\tJohn Doe\tCEO\tTechnology\tJane Smith\tCTO\r\nHQ|John Doe|CEO > Global Sales|Tom Clark|COO > Overseas|Zoe Cheng|Manager",
+        pathComposerBatchApply: "Apply Batch",
+        pathComposerBatchClear: "Clear Batch",
+        pathComposerBatchNoValid: "No valid paths were found in the batch input",
+        pathComposerBatchApplied: "Applied {count} of {total} path rows",
+        addRoot: "+ Add Root",
+        addChild: "+ Add Child",
+        addSibling: "+ Add Sibling",
+        deleteNode: "Delete Node",
+        selectedNodeLabel: "Selected",
+        selectedNodeNone: "No node selected",
+        nodePropertiesTitle: "Node Properties",
+        nodeFieldNodeId: "NodeID",
+        nodeFieldParentId: "ParentID",
+        nodeFieldPageGroup: "PageGroup",
+        nodeFieldSortOrder: "SortOrder",
+        nodeFieldDept: "Dept",
+        nodeFieldName: "Name",
+        nodeFieldTitle: "Title",
+        nodeFieldRoleType: "RoleType",
+        nodeFieldLayoutType: "LayoutType",
+        nodeFieldColor: "Color",
+        relationTitle: "Special Relations / Dotted Reporting",
+        relationTarget: "Target Node",
+        relationType: "Relation Type",
+        relationScope: "Display Scope",
+        relationLabel: "Label",
+        relationAddBtn: "Add Relation",
+        relationDelete: "Delete",
+        relationEmpty: "The selected node has no special relations",
+        relationBatchTitle: "Batch Relations",
+        relationBatchHint: "Paste TargetID, TargetID|dotted|local|Label, or full FromID|ToID|dotted|local|Label rows.",
+        relationBatchPlaceholder: "SALES_HEAD\r\nCTO|SALES_HEAD|dotted|cross-page|Support",
+        relationBatchApply: "Apply Relation Batch",
+        relationBatchClear: "Clear Relation Batch",
+        relationBatchNoValid: "No valid relations were found in the batch input",
+        relationBatchApplied: "Applied {count} of {total} relations",
+        previewSelectionPrefix: "Preview Selection",
+        previewSelectionHint: "The preview is treated as the final visual state. Both panels write back to the same V2 workbook.",
+        previewContextTitle: "Preview Quick Actions",
+        previewContextSeed: "Seed Path Entry",
+        previewContextAddChild: "Add Child",
+        previewContextAddSibling: "Add Sibling",
+        previewContextPickRelation: "Pick Dotted Target",
+        previewContextCollapse: "Collapse Branch",
+        previewContextExpand: "Expand Branch",
+        previewContextDelete: "Delete Node",
+        previewToolbarPickRelation: "Dotted",
+        previewToolbarPickCancel: "Cancel Link",
+        previewRelationPickHint: "Dotted relation picker is active. Click another preview node as the target.",
+        newNodeDept: "New Dept",
+        newNodeName: "New Member",
+        newNodeTitle: "Title",
+        warnCycleParent: "ParentID cannot point to itself or one of its descendants",
+        previewPageLabel: "Preview Page Group",
+        previewModeLegacy: "Legacy single-tree preview",
+        previewModeV2: "V2 workbook preview with {count} page groups",
+        severityError: "Error",
+        severityWarning: "Warning",
+        issueLine: "Line {line}",
+        emptyCanvas: "No valid data is available to draw",
+        errColumns: "Missing columns. Use Level, Dept, Name, Title[, Color]",
+        errLevel: "Level must be an integer greater than 0",
+        errNodesSheet: "Nodes sheet is missing",
+        errSlidesSheet: "Slides sheet is missing",
+        errNodeId: "NodeID is required and must be unique",
+        errParentRef: "ParentID does not match any existing NodeID",
+        errPageGroup: "PageGroup does not match a Slides definition",
+        errSlideRoot: "Slides.RootNodeID does not match any node",
+        errEdgeRef: "Edges references a missing node",
+        warnDraftImport: "This is a draft import. Review it before treating it as a source workbook",
+        warnPdfDraft: "No embedded metadata was found in this PDF. Only self-generated PDFs are supported for reliable re-import",
+        warnPptDraft: "No embedded metadata was found in this PPT. Only self-generated PPTs are supported for reliable re-import",
+        workbookLoaded: "# V2 workbook loaded",
+        workbookSlides: "# Slides: {count}",
+        workbookHint: "# Edit the workbook grid above to change V2 data, or re-import Excel.",
+        crossRefShort: "ref",
+        vacantPrefix: "[Vacant]",
+        draftRootTitle: "Imported Root",
+        draftImportNodeTitle: "Draft Import",
+        pptDraftSource: "PPT Draft",
+        pdfDraftSource: "PDF Draft",
+        warnRootFallback: "Parent node is missing, so this row was treated as a root node",
+        warnLevelJump: "Skipped hierarchy levels; attached to the nearest available parent",
+        warnMissingDept: "Dept is blank",
+        warnMissingName: "Name is blank",
+        warnMissingTitle: "Title is blank",
+        warnDuplicate: "Dept / Name / Title is duplicated. Consider using unique identifiers",
+        
+        // Document Level Translations
+        slideTitleObj: "Organization Chart",
+        slideTitleOverview: "Org Chart - Executive Overview",
+        slideTitleDept: "Department Chart - "
+    }
+};
+
+function t(key){
+    return translations[uiLang][key] !== undefined ? translations[uiLang][key] : key;
+}
+function tf(key, values={}){
+    return t(key).replace(/\{(\w+)\}/g, (_, token) => values[token] !== undefined ? values[token] : '');
+}
+function dt(key){
+    return translations[docLang][key] !== undefined ? translations[docLang][key] : t(key);
+}
+function escapeHtml(text){
+    return String(text).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function escapeJs(text){
+    return String(text).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+function editorSheetLabel(sheet){
+    const key='sheet'+sheet;
+    return t(key);
+}
+function updateDynamicLabels(model){
+    const isV2=!!(workbookState && workbookState.mode==='v2');
+    document.title = t('appTitle');
+    document.getElementById('searchInput').placeholder = t('searchPlaceholder');
+    document.getElementById('searchClearBtn').textContent = t('searchClear');
+    document.getElementById('validationTitle').textContent = t('validationTitle');
+    document.getElementById('previewPageLabel').textContent = t('previewPageLabel');
+    document.getElementById('editorTitle').textContent = t('editorTitle');
+    document.getElementById('editorHint').textContent = t('editorHint');
+    document.getElementById('addRowBtn').textContent = t('addRow');
+    document.getElementById('saveWorkbookBtn').textContent = t('saveWorkbook');
+    document.getElementById('layoutEditBtn').textContent = layoutEditMode ? t('layoutEditOn') : t('layoutEditOff');
+    document.getElementById('modeBadge').textContent = isV2 ? t('modeV2') : t('modeLegacy');
+    document.getElementById('collapseTitle').textContent = isV2 ? t('step3TitleV2') : t('step3TitleLegacy');
+    document.getElementById('previewHintText').textContent = isV2 ? t('previewHintV2') : t('previewHintLegacy');
+    document.getElementById('mapperSeedBtn').textContent = t('pathComposerSeed');
+    document.getElementById('mapperAddRootBtn').textContent = t('addRoot');
+    document.getElementById('mapperAddChildBtn').textContent = t('addChild');
+    document.getElementById('mapperAddSiblingBtn').textContent = t('addSibling');
+    document.getElementById('mapperDeleteBtn').textContent = t('deleteNode');
+    document.querySelector('#docLangSelect option[value="tw"]').textContent = t('docLangTw');
+    document.querySelector('#docLangSelect option[value="en"]').textContent = t('docLangEn');
+    document.querySelector('#exportModeSelect option[value="stable"]').textContent = t('exportModeStable');
+    document.querySelector('#exportModeSelect option[value="styled"]').textContent = t('exportModeStyled');
+    document.querySelector('button[onclick="zoom(-0.15)"]').title = t('zoomOutTitle');
+    document.querySelector('button[onclick="zoom(0.15)"]').title = t('zoomInTitle');
+    renderSearchSummary(model);
+    renderValidationPanel(model);
+    renderPreviewModeSummary();
+    renderEditorPanel();
+    renderDataModeArea(model);
+    refreshAllFileInputLabels();
+}
+
+const CUSTOM_FILE_INPUT_IDS=['excelUpload','pptUpload','pdfUpload','logoUpload'];
+function triggerFileInput(inputId){
+    document.getElementById(inputId)?.click();
+}
+function updateFileInputLabel(inputId){
+    const input=document.getElementById(inputId);
+    const label=document.getElementById(`${inputId}Name`);
+    if(!input || !label) return;
+    label.textContent=input.files && input.files.length ? Array.from(input.files).map(file=>file.name).join(', ') : t('noFileSelected');
+}
+function refreshAllFileInputLabels(){
+    CUSTOM_FILE_INPUT_IDS.forEach(updateFileInputLabel);
+}
+function detectPreferredUILang(){
+    try {
+        const stored=localStorage.getItem(UI_LANG_STORAGE_KEY);
+        if(stored==='tw' || stored==='en') return stored;
+    } catch {}
+    const browserLang=(navigator.language || navigator.userLanguage || '').toLowerCase();
+    return browserLang.startsWith('zh') ? 'tw' : 'en';
+}
+function persistUILang(){
+    try {
+        localStorage.setItem(UI_LANG_STORAGE_KEY, uiLang);
+    } catch {}
+}
+function syncLangButtonLabel(){
+    document.getElementById('langBtn').innerText = uiLang === 'tw' ? '🌐 EN (UI)' : '🌐 中文 (UI)';
+}
+function initializeUILang(){
+    uiLang = detectPreferredUILang();
+    syncLangButtonLabel();
+}
+
+// 切換介面語言 (不影響輸入的文字內容)
+function toggleUILang(){
+    uiLang = uiLang === 'tw' ? 'en' : 'tw';
+    persistUILang();
+    syncLangButtonLabel();
+    
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if (translations[uiLang][k] !== undefined) {
+            el.innerHTML = translations[uiLang][k];
+        }
+    });
+    if(workbookState && workbookState.mode==='v2') setTextareaForWorkbook(workbookState);
+    updateDynamicLabels(lastModel || buildOrgModel());
+    drawCanvasPreview(1);
+}
+
+// 切換內容語言 (影響標題與範例資料)
+function changeDocLang(){
+    docLang = document.getElementById('docLangSelect').value;
+
+    const currentData = document.getElementById('dataInput').value.trim();
+    const isSampleTw = currentData === sampleTw.trim();
+    const isSampleEn = currentData === sampleEn.trim();
+
+    // 只有在顯示範例資料時才自動切換內容，不覆蓋使用者自行輸入的資料
+    if (isSampleTw || isSampleEn) {
+        collapsed.clear();
+        document.getElementById('dataInput').value = docLang === 'tw' ? sampleTw : sampleEn;
+    }
+
+    drawCanvasPreview(1);
+    refreshDeptSelect();
+}
+
+// ══ Modal ══
+function openManual(){ document.getElementById('manualModal').classList.add('open'); }
+function openExcelModal(){ document.getElementById('excelModal').classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.addEventListener('click',e=>{ if(e.target.classList.contains('modal-overlay')) e.target.classList.remove('open'); });
+
+// ══ Collapse ══
+function toggleCollapse(){
+    document.getElementById('collapseBody').classList.toggle('open');
+    document.getElementById('collapseArrow').classList.toggle('open');
+}
+
+// ══ Themes ══
+const THEMES={
+    blue:    ['0A192F','1A365D','2C5282','2B6CB0','3182CE'],
+    gray:    ['2D3748','4A5568','718096','A0AEC0','CBD5E0'],
+    orange:  ['7B341E','9C4221','C05621','DD6B20','ED8936'],
+    primax:  ['004D4D','006666','007A7A','009999','00B3B3'],
+    tymphany:['0D2440','152E52','1B3F6E','22508A','2B63A8'],
+    white:   ['FFFFFF','F8FAFC','F1F5F9','E2E8F0','CBD5E1'],
+    bw:      ['1A1A1A','333333','4D4D4D','666666','808080']
+};
+function getThemeColors(){ return THEMES[document.getElementById('themeSelect').value]||THEMES.blue; }
+function updateSwatches(){
+    getThemeColors().forEach((h,i)=>{ const el=document.getElementById('sw'+i); if(el) el.style.background='#'+h; });
+}
+
+// 切換主題時只更新色塊並重繪，不回寫色碼到 textarea
+function applyThemeAndPreview(){ 
+    if(workbookState && workbookState.mode==='v2' && workbookState.sourceWorkbook){
+        const selectedPageGroup=workbookState.selectedPageGroup;
+        workbookState=parseWorkbookV2(workbookState.sourceWorkbook);
+        workbookState.selectedPageGroup=workbookState.slides.some(slide=>slide.pageGroup===selectedPageGroup) ? selectedPageGroup : workbookState.selectedPageGroup;
+        ensureSelectedNodeForCurrentSlide();
+        refreshSlideGroupSelect();
+    }
+    updateSwatches(); 
+    drawCanvasPreview(1); 
+    refreshDeptSelect(); 
+}
+
+// ══ Core ══
+const BASE_CARD_W=1.8,BASE_CARD_H=0.8,BASE_GAP_X=0.4,BASE_GAP_Y=1.0,PPI=100;
+const PAD_X=0.5*PPI,PAD_Y=1.0*PPI;
+let logoBase64=null,logoImg=new Image();
+let collapsed=new Set(),hitBoxes=[],isExporting=false;
+let lastModel=null,searchQuery='',searchMatchIds=new Set(),searchContextIds=new Set(),searchFocusPending=false;
+let workbookState=null;
+let selectedNodeId=null;
+let pathComposerState=[];
+let pathComposerBatchText='';
+let relationBatchText='';
+let previewContextMenuState={visible:false,nodeId:null,x:0,y:0};
+let relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+let layoutEditMode=false,draggedNodeId=null,draggedNodeStartOverride=null,draggingNode=false;
+const METADATA_PREFIX='OGMODELV2:';
+const EDITOR_SHEETS=['Nodes','Edges','Slides','LayoutOverrides'];
+const ROLE_TYPES=['normal','assistant','shared-service','vacant','acting'];
+const LAYOUT_TYPES=['standard','between','sidecar','stacked','hidden-overview'];
+const EDGE_TYPES=['solid','dotted','advisory','project','reference'];
+
+const sampleTw = `1, 總公司, 王大明, CEO
+2, 產品技術處, 陳小華, 技術長
+3, 軟體開發部, 林阿呆, 經理
+3, 系統維運部, 李大方, 經理
+2, 全球業務處, 張大帥, 營運長
+3, 國內業務, 孫六, 經理
+4, 北區組, 周七, 專員
+4, 中南區組, 吳八, 專員
+3, 海外業務, 鄭九, 經理`;
+
+const sampleEn = `1, HQ, John Doe, CEO
+2, Technology, Jane Smith, CTO
+3, Software Dev, Bob Lee, Manager
+3, IT Ops, Alice Wang, Manager
+2, Global Sales, Tom Clark, COO
+3, Domestic, Sam Sun, Manager
+4, North Team, Ivy Chou, Spec
+4, South Team, Ken Wu, Spec
+3, Overseas, Zoe Cheng, Manager`;
+
+// ══ Zoom & Pan ══
+let zoomScale=1.0,panX=12,panY=12;
+let isDragging=false,dragSX=0,dragSY=0,dragOX=0,dragOY=0,draggedDistance=0;
+function applyTransform(){
+    document.getElementById('previewInner').style.transform=`translate(${panX}px,${panY}px) scale(${zoomScale})`;
+    document.getElementById('zoomLabel').textContent=Math.round(zoomScale*100)+'%';
+}
+function zoom(delta,cx,cy){
+    const w=document.getElementById('previewWrapper');
+    const r=w.getBoundingClientRect();
+    const px=(cx!==undefined?cx:r.width/2)-panX;
+    const py=(cy!==undefined?cy:r.height/2)-panY;
+    const prev=zoomScale;
+    zoomScale=Math.max(0.1,Math.min(5.0,zoomScale+delta));
+    panX-=px*(zoomScale-prev); panY-=py*(zoomScale-prev);
+    applyTransform();
+}
+function zoomFit(){
+    const w=document.getElementById('previewWrapper');
+    const c=document.getElementById('previewCanvas');
+    if(!c.offsetWidth) return;
+    const sx=w.clientWidth/c.offsetWidth, sy=w.clientHeight/c.offsetHeight;
+    zoomScale=Math.min(sx,sy)*0.92;
+    panX=(w.clientWidth-c.offsetWidth*zoomScale)/2;
+    panY=(w.clientHeight-c.offsetHeight*zoomScale)/2;
+    applyTransform();
+}
+function zoomReset(){ zoomScale=1.0; panX=12; panY=12; applyTransform(); }
+
+// ══ Data ══
+function createIssue(severity, code, lineNo){
+    return {severity, code, lineNo};
+}
+function cloneRows(rows){
+    return rows.map(row=>({...row}));
+}
+function normalizeBool(v, fallback=true){
+    if(v === '' || v === null || v === undefined) return fallback;
+    if(typeof v === 'boolean') return v;
+    const s=String(v).trim().toLowerCase();
+    if(['true','1','yes','y'].includes(s)) return true;
+    if(['false','0','no','n'].includes(s)) return false;
+    return fallback;
+}
+function normalizeInt(v, fallback=null){
+    if(v === '' || v === null || v === undefined) return fallback;
+    const n=parseInt(v,10);
+    return Number.isInteger(n) ? n : fallback;
+}
+function pickField(row, keys){
+    for(const key of keys){
+        if(row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') return row[key];
+    }
+    return '';
+}
+function findSheetName(sheetNames, target){
+    const found=sheetNames.find(name=>name.toLowerCase()===target.toLowerCase());
+    return found || null;
+}
+function buildWorkbookFromRows(data){
+    const wb=XLSX.utils.book_new();
+    const sheets=[
+        ['Nodes', data.nodesRows || []],
+        ['Edges', data.edgesRows || []],
+        ['Slides', data.slidesRows || []],
+        ['LayoutOverrides', data.layoutRows || []]
+    ];
+    sheets.forEach(([name, rows])=>{
+        const headers=rows.length ? Object.keys(rows.reduce((acc,row)=>Object.assign(acc,row),{})) : [];
+        const ws=headers.length ? XLSX.utils.json_to_sheet(rows,{header:headers}) : XLSX.utils.aoa_to_sheet([[]]);
+        XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+    return wb;
+}
+function getCurrentExportMode(){
+    return document.getElementById('exportModeSelect').value;
+}
+function serializeWorkbookPayload(){
+    if(!workbookState || workbookState.mode!=='v2') return null;
+    return {
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        theme: document.getElementById('themeSelect').value,
+        exportMode: getCurrentExportMode(),
+        selectedPageGroup: workbookState.selectedPageGroup,
+        workbook: {
+            nodesRows: cloneRows(workbookState.nodesRows),
+            edgesRows: cloneRows(workbookState.edgesRows),
+            slidesRows: cloneRows(workbookState.slidesRows),
+            layoutRows: cloneRows(workbookState.layoutRows)
+        }
+    };
+}
+function encodeMetadataPayload(payload){
+    return METADATA_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+}
+function decodeMetadataPayload(encoded){
+    if(!encoded || !encoded.startsWith(METADATA_PREFIX)) return null;
+    try {
+        return JSON.parse(decodeURIComponent(escape(atob(encoded.slice(METADATA_PREFIX.length)))));
+    } catch {
+        return null;
+    }
+}
+function extractMetadataPayload(text){
+    const match=text.match(/OGMODELV2:[A-Za-z0-9+/=]+/);
+    return match ? decodeMetadataPayload(match[0]) : null;
+}
+function loadSerializedPayload(payload){
+    if(!payload || !payload.workbook) return false;
+    const wb=buildWorkbookFromRows(payload.workbook);
+    workbookState=parseWorkbookV2(wb);
+    pathComposerState=[];
+    pathComposerBatchText='';
+    relationBatchText='';
+    relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+    closePreviewContextMenu();
+    workbookState.selectedPageGroup=workbookState.slides.some(slide=>slide.pageGroup===payload.selectedPageGroup) ? payload.selectedPageGroup : workbookState.selectedPageGroup;
+    ensureSelectedNodeForCurrentSlide();
+    if(payload.theme && document.getElementById('themeSelect').querySelector(`option[value="${payload.theme}"]`)) document.getElementById('themeSelect').value=payload.theme;
+    if(payload.exportMode && document.getElementById('exportModeSelect').querySelector(`option[value="${payload.exportMode}"]`)) document.getElementById('exportModeSelect').value=payload.exportMode;
+    refreshSlideGroupSelect();
+    setTextareaForWorkbook(workbookState);
+    collapsed.clear();
+    clearSearch();
+    applyThemeAndPreview();
+    return true;
+}
+function getSheetRows(sheetName){
+    if(!workbookState) return [];
+    if(sheetName==='Nodes') return workbookState.nodesRows || [];
+    if(sheetName==='Edges') return workbookState.edgesRows || [];
+    if(sheetName==='Slides') return workbookState.slidesRows || [];
+    return workbookState.layoutRows || [];
+}
+function getSheetDefaults(sheetName){
+    if(sheetName==='Nodes') return {NodeID:'',ParentID:'',Dept:'',Name:'',Title:'',PageGroup:'',SortOrder:'',RoleType:'normal',LayoutType:'standard',LevelHint:'',Color:'',ShowInOverview:'true',ShowInDetail:'true',AliasOf:'',OffsetX:'',OffsetY:'',WidthHint:'',HeightHint:''};
+    if(sheetName==='Edges') return {EdgeID:'',FromNodeID:'',ToNodeID:'',EdgeType:'dotted',PageScope:'local',Label:''};
+    if(sheetName==='Slides') return {PageGroup:'',SlideTitle:'',RenderMode:'subtree',RootNodeID:'',MaxDepth:'',SlideOrder:'',ParentGroup:'',IncludeCrossLinks:'false',LayoutPreset:'',OverflowStrategy:'split-by-child-group'};
+    return {TargetType:'node',TargetID:'',PageGroup:'',OffsetX:'0',OffsetY:'0',AnchorMode:'center',ZIndex:'0'};
+}
+function rebuildWorkbookStateFromRows(){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const selectedPageGroup=workbookState.selectedPageGroup;
+    const selectedEditorSheet=workbookState.selectedEditorSheet || 'Nodes';
+    const preservedSelectionId=selectedNodeId;
+    const wb=buildWorkbookFromRows({
+        nodesRows:workbookState.nodesRows,
+        edgesRows:workbookState.edgesRows,
+        slidesRows:workbookState.slidesRows,
+        layoutRows:workbookState.layoutRows
+    });
+    workbookState=parseWorkbookV2(wb);
+    workbookState.selectedEditorSheet=selectedEditorSheet;
+    workbookState.selectedPageGroup=workbookState.slides.some(slide=>slide.pageGroup===selectedPageGroup) ? selectedPageGroup : workbookState.selectedPageGroup;
+    if(preservedSelectionId && workbookState.nodesById.has(preservedSelectionId)){
+        selectedNodeId=preservedSelectionId;
+        const selectedNode=workbookState.nodesById.get(selectedNodeId);
+        if(selectedNode && workbookState.slides.some(slide=>slide.pageGroup===selectedNode.pageGroup)) workbookState.selectedPageGroup=selectedNode.pageGroup;
+    } else {
+        selectedNodeId=null;
+    }
+    if(relationPickState.active && !workbookState.nodesById.has(relationPickState.fromNodeId)){
+        relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+    }
+    ensureSelectedNodeForCurrentSlide();
+    refreshSlideGroupSelect();
+    setTextareaForWorkbook(workbookState);
+    renderPreviewContextMenu();
+    drawCanvasPreview(1);
+    refreshDeptSelect();
+}
+function getNodeIdFromRow(row){
+    return String(pickField(row,['NodeID','nodeId','節點ID'])).trim();
+}
+function getNodeRowIndexById(nodeId){
+    if(!workbookState || workbookState.mode!=='v2') return -1;
+    return workbookState.nodesRows.findIndex(row=>getNodeIdFromRow(row)===nodeId);
+}
+function getNodeRowById(nodeId){
+    const index=getNodeRowIndexById(nodeId);
+    return index>=0 ? workbookState.nodesRows[index] : null;
+}
+function getSelectedNode(){
+    if(!workbookState || workbookState.mode!=='v2' || !selectedNodeId) return null;
+    return workbookState.nodesById.get(selectedNodeId) || null;
+}
+function ensureSelectedNodeForCurrentSlide(){
+    if(!workbookState || workbookState.mode!=='v2'){
+        selectedNodeId=null;
+        return;
+    }
+    if(selectedNodeId && workbookState.nodesById.has(selectedNodeId)) return;
+    const currentSlide=workbookState.slides.find(slide=>slide.pageGroup===workbookState.selectedPageGroup) || workbookState.slides[0];
+    selectedNodeId=currentSlide?.rootNodeId || workbookState.allRoots[0]?.id || null;
+}
+function formatNodeLabel(node){
+    if(!node) return t('selectedNodeNone');
+    const primary=node.dept || node.id;
+    const secondary=[node.name,node.title].filter(Boolean).join(' / ');
+    return secondary ? `${primary} - ${secondary}` : primary;
+}
+function buildEnumOptions(values,currentValue){
+    return values.map(value=>`<option value="${escapeHtml(value)}"${value===currentValue?' selected':''}>${escapeHtml(value)}</option>`).join('');
+}
+function buildNodeOptionsHtml(currentValue, excludeIds=new Set(), includeBlank=true){
+    const rows=(workbookState?.nodesRows || []).slice().sort((a,b)=>{
+        const aGroup=String(a.PageGroup || '');
+        const bGroup=String(b.PageGroup || '');
+        if(aGroup!==bGroup) return aGroup.localeCompare(bGroup);
+        return getNodeIdFromRow(a).localeCompare(getNodeIdFromRow(b));
+    });
+    const options=[];
+    if(includeBlank) options.push(`<option value="">(root)</option>`);
+    rows.forEach(row=>{
+        const nodeId=getNodeIdFromRow(row);
+        if(!nodeId || excludeIds.has(nodeId)) return;
+        const label=[row.PageGroup || '', row.Dept || nodeId, row.Name || '', row.Title || ''].filter(Boolean).join(' / ');
+        options.push(`<option value="${escapeHtml(nodeId)}"${nodeId===currentValue?' selected':''}>${escapeHtml(label)}</option>`);
+    });
+    return options.join('');
+}
+function buildPageGroupOptionsHtml(currentValue){
+    return (workbookState?.slides || []).map(slide=>{
+        const value=slide.pageGroup;
+        const label=slide.slideTitle || slide.pageGroup;
+        return `<option value="${escapeHtml(value)}"${value===currentValue?' selected':''}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+function buildEdgeScopeOptionsHtml(currentValue){
+    const options=[
+        {value:'local',label:'local'},
+        {value:'cross-page',label:'cross-page'}
+    ];
+    (workbookState?.slides || []).forEach(slide=>{
+        options.push({value:slide.pageGroup,label:slide.slideTitle || slide.pageGroup});
+    });
+    const used=new Set();
+    return options.filter(option=>{
+        if(used.has(option.value)) return false;
+        used.add(option.value);
+        return true;
+    }).map(option=>`<option value="${escapeHtml(option.value)}"${option.value===currentValue?' selected':''}>${escapeHtml(option.label)}</option>`).join('');
+}
+function updateRelationBatchText(value){
+    relationBatchText=value;
+}
+function clearRelationBatchText(){
+    relationBatchText='';
+    renderNodePropertyPanel();
+}
+function buildUniqueEdgeId(){
+    const existingIds=new Set((workbookState?.edgesRows || []).map(row=>String(row.EdgeID || row.edgeId || '').trim()));
+    let index=existingIds.size + 1;
+    let edgeId=`EDGE_${index}`;
+    while(existingIds.has(edgeId)){
+        index++;
+        edgeId=`EDGE_${index}`;
+    }
+    return edgeId;
+}
+function upsertEdgeRow(edgeInput){
+    if(!workbookState || workbookState.mode!=='v2') return null;
+    const fromNodeId=String(edgeInput?.fromNodeId || '').trim();
+    const toNodeId=String(edgeInput?.toNodeId || '').trim();
+    const edgeType=String(edgeInput?.edgeType || 'dotted').trim() || 'dotted';
+    const pageScope=String(edgeInput?.pageScope || 'local').trim() || 'local';
+    const label=String(edgeInput?.label || '').trim();
+    if(!fromNodeId || !toNodeId || fromNodeId===toNodeId) return null;
+    if(!workbookState.nodesById.has(fromNodeId) || !workbookState.nodesById.has(toNodeId)) return null;
+    const existingRow=(workbookState.edgesRows || []).find(row=>
+        String(row.FromNodeID || row.fromNodeId || '').trim()===fromNodeId &&
+        String(row.ToNodeID || row.toNodeId || '').trim()===toNodeId &&
+        String(row.EdgeType || row.edgeType || 'dotted').trim()===edgeType &&
+        String(row.PageScope || row.pageScope || 'local').trim()===pageScope &&
+        String(row.Label || row.label || '').trim()===label
+    );
+    if(existingRow) return String(existingRow.EdgeID || existingRow.edgeId || '').trim() || 'existing';
+    const edgeId=buildUniqueEdgeId();
+    workbookState.edgesRows.push({
+        EdgeID:edgeId,
+        FromNodeID:fromNodeId,
+        ToNodeID:toNodeId,
+        EdgeType:edgeType,
+        PageScope:pageScope,
+        Label:label
+    });
+    return edgeId;
+}
+function parseRelationBatchLine(line, defaultFromNodeId=''){
+    const raw=String(line || '').trim();
+    if(!raw) return null;
+    const parts=(raw.includes('\t') ? raw.split('\t') : raw.split('|')).map(item=>item.trim());
+    if(parts.length===1){
+        return {fromNodeId:defaultFromNodeId,toNodeId:parts[0],edgeType:'dotted',pageScope:'local',label:''};
+    }
+    if(parts.length===4){
+        return {fromNodeId:defaultFromNodeId,toNodeId:parts[0],edgeType:parts[1] || 'dotted',pageScope:parts[2] || 'local',label:parts[3] || ''};
+    }
+    if(parts.length>=5){
+        return {fromNodeId:parts[0],toNodeId:parts[1],edgeType:parts[2] || 'dotted',pageScope:parts[3] || 'local',label:parts.slice(4).join('|')};
+    }
+    return null;
+}
+function cancelPreviewRelationPick(shouldRedraw=true){
+    relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+    if(shouldRedraw) drawCanvasPreview(1);
+}
+function startPreviewRelationPick(edgeType='dotted', pageScope='local'){
+    const node=getSelectedNode();
+    if(!node) return;
+    closePreviewContextMenu();
+    relationPickState={active:true,fromNodeId:node.id,edgeType,pageScope};
+    drawCanvasPreview(1);
+}
+function togglePreviewRelationPick(){
+    if(relationPickState.active){
+        cancelPreviewRelationPick();
+        return;
+    }
+    startPreviewRelationPick('dotted','local');
+}
+function buildVisibleHierarchyRows(model){
+    const rows=[];
+    let maxDepth=1;
+    function walk(node,pathIds){
+        const nextPath=pathIds.concat(node.id);
+        maxDepth=Math.max(maxDepth,nextPath.length);
+        rows.push({nodeId:node.id,pathIds:nextPath});
+        node.children.forEach(child=>walk(child,nextPath));
+    }
+    (model?.roots || []).forEach(root=>walk(root,[]));
+    return {rows,maxDepth};
+}
+function getPathComposerLevelCount(model){
+    const {maxDepth}=buildVisibleHierarchyRows(model || lastModel || buildOrgModel());
+    return Math.max(4, Math.min(8, (maxDepth || 1) + 1));
+}
+function ensurePathComposerState(levelCount){
+    while(pathComposerState.length<levelCount) pathComposerState.push({dept:'',name:'',title:''});
+    if(pathComposerState.length>levelCount) pathComposerState=pathComposerState.slice(0,levelCount);
+}
+function normalizePathComposerLevels(levelCount){
+    ensurePathComposerState(levelCount);
+    return pathComposerState.slice(0,levelCount).map(level=>({
+        dept:String(level.dept || '').trim(),
+        name:String(level.name || '').trim(),
+        title:String(level.title || '').trim()
+    }));
+}
+function clearPathComposer(){
+    pathComposerState=[];
+    renderPathComposer(lastModel || buildOrgModel());
+}
+function seedPathComposerFromSelected(){
+    const node=getSelectedNode();
+    if(!node) return;
+    const path=[];
+    let cursor=node;
+    while(cursor){
+        path.unshift(cursor);
+        cursor=cursor.parent;
+    }
+    pathComposerState=path.map(item=>({dept:item.dept || '',name:item.name || '',title:item.title || ''}));
+    pathComposerState.push({dept:'',name:'',title:''});
+    renderPathComposer(buildOrgModel());
+}
+function updatePathComposerCell(index, field, value){
+    ensurePathComposerState(index+1);
+    pathComposerState[index][field]=value;
+    renderPathComposer(lastModel || buildOrgModel());
+}
+function updatePathComposerBatchText(value){
+    pathComposerBatchText=value;
+}
+function clearPathComposerBatch(){
+    pathComposerBatchText='';
+    renderPathComposer(lastModel || buildOrgModel());
+}
+function renderPathComposer(model){
+    const panel=document.getElementById('pathComposerPanel');
+    if(!panel) return;
+    if(!workbookState || workbookState.mode!=='v2'){
+        panel.innerHTML='';
+        return;
+    }
+    const levelCount=getPathComposerLevelCount(model);
+    const levels=normalizePathComposerLevels(levelCount);
+    const cells=levels.map((level,index)=>`<div class="path-composer-cell"><div class="path-composer-level">${escapeHtml(tf('mapperLevel',{level:index+1}))}</div><label class="path-composer-field"><span>${escapeHtml(t('pathComposerDept'))}</span><input value="${escapeHtml(level.dept)}" onchange="updatePathComposerCell(${index},'dept',this.value)"></label><label class="path-composer-field"><span>${escapeHtml(t('pathComposerName'))}</span><input value="${escapeHtml(level.name)}" onchange="updatePathComposerCell(${index},'name',this.value)"></label><label class="path-composer-field"><span>${escapeHtml(t('pathComposerJobTitle'))}</span><input value="${escapeHtml(level.title)}" onchange="updatePathComposerCell(${index},'title',this.value)"></label></div>`).join('');
+    panel.innerHTML=`<div class="path-composer-header"><div><div class="path-composer-title">${escapeHtml(t('pathComposerTitle'))}</div><div class="path-composer-hint">${escapeHtml(t('pathComposerHint'))}</div></div><div class="editor-actions"><button class="zoom-fit-btn" onclick="applyPathComposer()">${escapeHtml(t('pathComposerApply'))}</button><button class="zoom-fit-btn" onclick="clearPathComposer()">${escapeHtml(t('pathComposerClear'))}</button></div></div><div class="path-composer-grid">${cells}</div><div class="path-bulk-wrap"><div class="path-bulk-title">${escapeHtml(t('pathComposerBatchTitle'))}</div><div class="path-bulk-hint">${escapeHtml(t('pathComposerBatchHint'))}</div><textarea class="path-bulk-textarea" placeholder="${escapeHtml(t('pathComposerBatchPlaceholder'))}" oninput="updatePathComposerBatchText(this.value)">${escapeHtml(pathComposerBatchText)}</textarea><div class="editor-actions"><button class="zoom-fit-btn" onclick="applyBatchPathComposer()">${escapeHtml(t('pathComposerBatchApply'))}</button><button class="zoom-fit-btn" onclick="clearPathComposerBatch()">${escapeHtml(t('pathComposerBatchClear'))}</button></div></div>`;
+}
+function rowMatchesComposerLevel(row, level){
+    return String(row.Dept || '').trim()===level.dept && String(row.Name || '').trim()===level.name && String(row.Title || '').trim()===level.title;
+}
+function buildNodeRowFromComposer(nodeId, parentId, pageGroup, levelData){
+    return {
+        NodeID:nodeId,
+        ParentID:parentId,
+        Dept:levelData.dept,
+        Name:levelData.name,
+        Title:levelData.title,
+        PageGroup:pageGroup,
+        SortOrder:String(getNextSortOrder(parentId)),
+        RoleType:'normal',
+        LayoutType:'standard',
+        LevelHint:'',
+        Color:'',
+        ShowInOverview:'true',
+        ShowInDetail:'true',
+        AliasOf:'',
+        OffsetX:'',
+        OffsetY:'',
+        WidthHint:'',
+        HeightHint:''
+    };
+}
+function ensureSlideRowForPageGroup(pageGroup){
+    let slideRow=workbookState.slidesRows.find(row=>String(row.PageGroup || '')===pageGroup);
+    if(slideRow) return slideRow;
+    slideRow={
+        PageGroup:pageGroup,
+        SlideTitle:pageGroup,
+        RenderMode:'subtree',
+        RootNodeID:'',
+        MaxDepth:'',
+        SlideOrder:String((workbookState.slidesRows || []).length + 1),
+        ParentGroup:'',
+        IncludeCrossLinks:'false',
+        LayoutPreset:'',
+        OverflowStrategy:'split-by-child-group'
+    };
+    workbookState.slidesRows.push(slideRow);
+    return slideRow;
+}
+function normalizePathLineLevel(level){
+    return {
+        dept:String(level?.dept || '').trim(),
+        name:String(level?.name || '').trim(),
+        title:String(level?.title || '').trim()
+    };
+}
+function parsePathLevelsFromLine(line){
+    const raw=String(line || '').trim();
+    if(!raw) return [];
+    let levels=[];
+    if(raw.includes('\t')){
+        const cols=raw.split('\t');
+        for(let index=0; index<cols.length; index+=3){
+            levels.push(normalizePathLineLevel({
+                dept:cols[index] || '',
+                name:cols[index+1] || '',
+                title:cols[index+2] || ''
+            }));
+        }
+    } else {
+        levels=raw.split(/\s*(?:>|→)\s*/).map(segment=>{
+            const parts=segment.split('|').map(item=>item.trim());
+            return normalizePathLineLevel({
+                dept:parts[0] || '',
+                name:parts[1] || '',
+                title:parts[2] || ''
+            });
+        });
+    }
+    return levels.filter(level=>level.dept || level.name || level.title);
+}
+function upsertPathLevels(levels, pageGroup){
+    if(!workbookState || workbookState.mode!=='v2' || !pageGroup) return null;
+    const cleanLevels=(levels || []).map(normalizePathLineLevel).filter(level=>level.dept || level.name || level.title);
+    if(!cleanLevels.length) return null;
+    const slideRow=ensureSlideRowForPageGroup(pageGroup);
+    let parentId='';
+    let lastNodeId='';
+    let currentRootRow=slideRow.RootNodeID ? getNodeRowById(String(slideRow.RootNodeID).trim()) : null;
+    cleanLevels.forEach((level,index)=>{
+        let row=null;
+        if(index===0){
+            if(currentRootRow && rowMatchesComposerLevel(currentRootRow,level)){
+                row=currentRootRow;
+            } else {
+                row=workbookState.nodesRows.find(nodeRow=>String(nodeRow.PageGroup || '')===pageGroup && !String(nodeRow.ParentID || '').trim() && rowMatchesComposerLevel(nodeRow,level));
+            }
+            if(!row){
+                const nodeId=buildUniqueNodeId(level.dept || level.name || `L${index+1}`);
+                row=buildNodeRowFromComposer(nodeId,'',pageGroup,level);
+                workbookState.nodesRows.push(row);
+            }
+            if(currentRootRow && getNodeIdFromRow(currentRootRow)!==getNodeIdFromRow(row) && !String(currentRootRow.ParentID || '').trim()){
+                currentRootRow.ParentID=getNodeIdFromRow(row);
+            }
+            row.Dept=level.dept;
+            row.Name=level.name;
+            row.Title=level.title;
+            row.PageGroup=pageGroup;
+            row.ParentID='';
+            slideRow.RootNodeID=getNodeIdFromRow(row);
+        } else {
+            row=workbookState.nodesRows.find(nodeRow=>String(nodeRow.PageGroup || '')===pageGroup && String(nodeRow.ParentID || '').trim()===parentId && rowMatchesComposerLevel(nodeRow,level));
+            if(!row){
+                const nodeId=buildUniqueNodeId(level.dept || level.name || `L${index+1}`);
+                row=buildNodeRowFromComposer(nodeId,parentId,pageGroup,level);
+                workbookState.nodesRows.push(row);
+            }
+            row.ParentID=parentId;
+            row.Dept=level.dept;
+            row.Name=level.name;
+            row.Title=level.title;
+            row.PageGroup=pageGroup;
+        }
+        lastNodeId=getNodeIdFromRow(row);
+        parentId=lastNodeId;
+        currentRootRow=slideRow.RootNodeID ? getNodeRowById(String(slideRow.RootNodeID).trim()) : currentRootRow;
+    });
+    return {slideRow,lastNodeId,levels:cleanLevels};
+}
+function applyPathComposer(){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const pageGroup=workbookState.selectedPageGroup || workbookState.slides[0]?.pageGroup || '';
+    if(!pageGroup) return;
+    const levels=normalizePathComposerLevels(getPathComposerLevelCount(lastModel || buildOrgModel())).filter(level=>level.dept || level.name || level.title);
+    const result=upsertPathLevels(levels,pageGroup);
+    if(!result) return;
+    pathComposerState=result.levels.concat([{dept:'',name:'',title:''}]);
+    selectedNodeId=result.lastNodeId || selectedNodeId;
+    rebuildWorkbookStateFromRows();
+}
+function applyBatchPathComposer(){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const pageGroup=workbookState.selectedPageGroup || workbookState.slides[0]?.pageGroup || '';
+    if(!pageGroup) return;
+    const rawLines=String(pathComposerBatchText || '').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    if(!rawLines.length){
+        alert(t('pathComposerBatchNoValid'));
+        return;
+    }
+    let applied=0;
+    let lastNodeId='';
+    let lastLevels=[];
+    rawLines.forEach(line=>{
+        const levels=parsePathLevelsFromLine(line);
+        const result=upsertPathLevels(levels,pageGroup);
+        if(!result) return;
+        applied++;
+        lastNodeId=result.lastNodeId || lastNodeId;
+        lastLevels=result.levels;
+    });
+    if(!applied){
+        alert(t('pathComposerBatchNoValid'));
+        return;
+    }
+    if(lastLevels.length) pathComposerState=lastLevels.concat([{dept:'',name:'',title:''}]);
+    selectedNodeId=lastNodeId || selectedNodeId;
+    alert(tf('pathComposerBatchApplied',{count:applied,total:rawLines.length}));
+    rebuildWorkbookStateFromRows();
+}
+function renderDataModeArea(model){
+    const textarea=document.getElementById('dataInput');
+    const hint=document.getElementById('dataModeHint');
+    const panel=document.getElementById('hierarchyMapperPanel');
+    const isV2=!!(workbookState && workbookState.mode==='v2');
+    textarea.readOnly=isV2;
+    textarea.classList.toggle('v2-textarea-summary',isV2);
+    hint.textContent=isV2 ? t('dataModeV2Hint') : t('dataModeLegacyHint');
+    panel.style.display=isV2 ? 'flex' : 'none';
+    if(isV2){
+        renderPathComposer(model);
+        renderHierarchyMapper(model);
+    }
+    else {
+        document.getElementById('pathComposerPanel').innerHTML='';
+        document.getElementById('hierarchyMapWrap').innerHTML='';
+        document.getElementById('mapperSummary').textContent='';
+        document.getElementById('nodePropertyPanel').innerHTML='';
+    }
+    renderPreviewSelectionBar();
+}
+function renderHierarchyMapper(model){
+    const wrap=document.getElementById('hierarchyMapWrap');
+    const summary=document.getElementById('mapperSummary');
+    if(!wrap || !summary) return;
+    if(!workbookState || workbookState.mode!=='v2'){
+        wrap.innerHTML='';
+        summary.textContent='';
+        return;
+    }
+    const {rows,maxDepth}=buildVisibleHierarchyRows(model || lastModel || buildOrgModel());
+    summary.textContent=tf('mapperSummary',{
+        pageGroup:workbookState.selectedPageGroup || '-',
+        count:rows.length,
+        depth:maxDepth
+    });
+    if(!rows.length){
+        wrap.innerHTML=`<div class="editor-empty">${escapeHtml(t('mapperEmpty'))}</div>`;
+        renderNodePropertyPanel();
+        return;
+    }
+    const levelHeaders=Array.from({length:maxDepth},(_,index)=>`<th>${escapeHtml(tf('mapperLevel',{level:index+1}))}</th>`).join('');
+    const body=rows.map(row=>{
+        const node=workbookState.nodesById.get(row.nodeId);
+        if(!node) return '';
+        const safeId=escapeJs(node.id);
+        const pathCells=Array.from({length:maxDepth},(_,index)=>{
+            const pathNodeId=row.pathIds[index];
+            if(!pathNodeId) return '<td class="mapper-empty"></td>';
+            const pathNode=workbookState.nodesById.get(pathNodeId);
+            if(!pathNode) return '<td class="mapper-empty"></td>';
+            const btnClasses=[
+                'mapper-path-btn',
+                pathNodeId===row.nodeId ? 'current' : '',
+                pathNodeId===selectedNodeId ? 'selected' : ''
+            ].filter(Boolean).join(' ');
+            return `<td class="mapper-level-cell"><button type="button" class="${btnClasses}" onclick="event.stopPropagation(); setSelectedNode('${escapeJs(pathNodeId)}')"><span class="mapper-path-dept">${escapeHtml(pathNode.dept || pathNode.id)}</span><span class="mapper-path-meta">${escapeHtml([pathNode.name,pathNode.title].filter(Boolean).join(' / ') || pathNode.id)}</span></button></td>`;
+        }).join('');
+        return `<tr class="${node.id===selectedNodeId?'selected':''}" onclick="setSelectedNode('${safeId}')">${pathCells}<td><input class="mapper-inline-input" value="${escapeHtml(node.dept || '')}" onchange="updateNodeFieldById('${safeId}','Dept',this.value)"></td><td><input class="mapper-inline-input" value="${escapeHtml(node.name || '')}" onchange="updateNodeFieldById('${safeId}','Name',this.value)"></td><td><input class="mapper-inline-input" value="${escapeHtml(node.title || '')}" onchange="updateNodeFieldById('${safeId}','Title',this.value)"></td><td><select class="mapper-inline-select" onchange="updateNodeFieldById('${safeId}','RoleType',this.value)">${buildEnumOptions(ROLE_TYPES,node.roleType || 'normal')}</select></td><td><select class="mapper-inline-select" onchange="updateNodeFieldById('${safeId}','LayoutType',this.value)">${buildEnumOptions(LAYOUT_TYPES,node.layoutType || 'standard')}</select></td></tr>`;
+    }).join('');
+    wrap.innerHTML=`<table class="mapper-table"><thead><tr>${levelHeaders}<th>${escapeHtml(t('mapperNodeDept'))}</th><th>${escapeHtml(t('mapperNodeName'))}</th><th>${escapeHtml(t('mapperNodeTitle'))}</th><th>${escapeHtml(t('mapperRoleType'))}</th><th>${escapeHtml(t('mapperLayoutType'))}</th></tr></thead><tbody>${body}</tbody></table>`;
+    renderNodePropertyPanel();
+}
+function renderNodePropertyPanel(){
+    const panel=document.getElementById('nodePropertyPanel');
+    if(!panel) return;
+    if(!workbookState || workbookState.mode!=='v2'){
+        panel.innerHTML='';
+        return;
+    }
+    const node=getSelectedNode();
+    if(!node){
+        panel.innerHTML=`<div class="editor-empty">${escapeHtml(t('mapperSelectNode'))}</div>`;
+        return;
+    }
+    const descendants=collectDescendantIds(node.id);
+    const relatedEdges=(workbookState.edgesRows || []).filter(edge=>{
+        const fromNodeId=String(edge.FromNodeID || edge.fromNodeId || '').trim();
+        const toNodeId=String(edge.ToNodeID || edge.toNodeId || '').trim();
+        return fromNodeId===node.id || toNodeId===node.id;
+    });
+    panel.innerHTML=`
+        <div class="property-header">
+            <div>
+                <div class="property-title">${escapeHtml(t('nodePropertiesTitle'))}</div>
+                <div class="property-subtitle">${escapeHtml(tf('selectedNodeLabel'))}: ${escapeHtml(formatNodeLabel(node))}</div>
+            </div>
+        </div>
+        <div class="property-grid">
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldNodeId'))}</span><input value="${escapeHtml(node.id)}" readonly></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldParentId'))}</span><select onchange="updateSelectedNodeParent(this.value)">${buildNodeOptionsHtml(node.parentId || '', descendants, true)}</select></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldPageGroup'))}</span><select onchange="updateSelectedNodeField('PageGroup',this.value)">${buildPageGroupOptionsHtml(node.pageGroup || '')}</select></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldSortOrder'))}</span><input value="${escapeHtml(String(node.sortOrder ?? ''))}" onchange="updateSelectedNodeField('SortOrder',this.value)"></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldDept'))}</span><input value="${escapeHtml(node.dept || '')}" onchange="updateSelectedNodeField('Dept',this.value)"></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldName'))}</span><input value="${escapeHtml(node.name || '')}" onchange="updateSelectedNodeField('Name',this.value)"></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldTitle'))}</span><input value="${escapeHtml(node.title || '')}" onchange="updateSelectedNodeField('Title',this.value)"></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldRoleType'))}</span><select onchange="updateSelectedNodeField('RoleType',this.value)">${buildEnumOptions(ROLE_TYPES,node.roleType || 'normal')}</select></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldLayoutType'))}</span><select onchange="updateSelectedNodeField('LayoutType',this.value)">${buildEnumOptions(LAYOUT_TYPES,node.layoutType || 'standard')}</select></label>
+            <label class="property-field"><span>${escapeHtml(t('nodeFieldColor'))}</span><input value="${escapeHtml((getNodeRowById(node.id)?.Color || '').toString())}" onchange="updateSelectedNodeField('Color',this.value)"></label>
+        </div>
+        <div class="property-actions">
+            <button class="zoom-fit-btn" onclick="seedPathComposerFromSelected()">${escapeHtml(t('pathComposerSeed'))}</button>
+            <button class="zoom-fit-btn" onclick="addNodeRelative('child')">${escapeHtml(t('addChild'))}</button>
+            <button class="zoom-fit-btn" onclick="addNodeRelative('sibling')">${escapeHtml(t('addSibling'))}</button>
+            <button class="zoom-fit-btn" onclick="togglePreviewRelationPick()">${escapeHtml(t(relationPickState.active && relationPickState.fromNodeId===node.id ? 'previewToolbarPickCancel' : 'previewToolbarPickRelation'))}</button>
+            <button class="zoom-fit-btn" onclick="deleteSelectedNode()">${escapeHtml(t('deleteNode'))}</button>
+        </div>
+        <div class="relation-panel">
+            <div class="relation-title">${escapeHtml(t('relationTitle'))}</div>
+            <div class="relation-grid">
+                <label class="property-field"><span>${escapeHtml(t('relationTarget'))}</span><select id="relationTargetSelect">${buildNodeOptionsHtml('',new Set([node.id]),false)}</select></label>
+                <label class="property-field"><span>${escapeHtml(t('relationType'))}</span><select id="relationTypeSelect">${buildEnumOptions(EDGE_TYPES,'dotted')}</select></label>
+                <label class="property-field"><span>${escapeHtml(t('relationScope'))}</span><select id="relationScopeSelect">${buildEdgeScopeOptionsHtml('local')}</select></label>
+                <label class="property-field"><span>${escapeHtml(t('relationLabel'))}</span><input id="relationLabelInput" value=""></label>
+            </div>
+            <div class="property-actions">
+                <button class="zoom-fit-btn" onclick="addEdgeFromSelected()">${escapeHtml(t('relationAddBtn'))}</button>
+            </div>
+            <div class="relation-batch-wrap">
+                <div class="relation-batch-title">${escapeHtml(t('relationBatchTitle'))}</div>
+                <div class="relation-batch-hint">${escapeHtml(t('relationBatchHint'))}</div>
+                <textarea class="relation-batch-textarea" placeholder="${escapeHtml(t('relationBatchPlaceholder'))}" oninput="updateRelationBatchText(this.value)">${escapeHtml(relationBatchText)}</textarea>
+                <div class="property-actions">
+                    <button class="zoom-fit-btn" onclick="applyRelationBatchFromSelected()">${escapeHtml(t('relationBatchApply'))}</button>
+                    <button class="zoom-fit-btn" onclick="clearRelationBatchText()">${escapeHtml(t('relationBatchClear'))}</button>
+                </div>
+            </div>
+            <div class="relation-list">${relatedEdges.length ? relatedEdges.map(edge=>{
+                const edgeId=String(edge.EdgeID || edge.edgeId || '').trim();
+                const fromNodeId=String(edge.FromNodeID || edge.fromNodeId || '').trim();
+                const toNodeId=String(edge.ToNodeID || edge.toNodeId || '').trim();
+                const edgeType=String(edge.EdgeType || edge.edgeType || 'dotted').trim();
+                const pageScope=String(edge.PageScope || edge.pageScope || 'local').trim();
+                const label=String(edge.Label || edge.label || '').trim();
+                return `<div class="relation-item"><div><strong>${escapeHtml(fromNodeId)}</strong> → <strong>${escapeHtml(toNodeId)}</strong> <span class="relation-item-meta">(${escapeHtml(edgeType)} / ${escapeHtml(pageScope)}${label ? ' / '+escapeHtml(label) : ''})</span></div><button class="zoom-fit-btn" onclick="removeEdgeById('${escapeJs(edgeId)}')">${escapeHtml(t('relationDelete'))}</button></div>`;
+            }).join('') : `<div class="editor-empty">${escapeHtml(t('relationEmpty'))}</div>`}</div>
+        </div>`;
+}
+function renderPreviewSelectionBar(){
+    const bar=document.getElementById('previewSelectionBar');
+    if(!bar) return;
+    const node=getSelectedNode();
+    if(!workbookState || workbookState.mode!=='v2' || !node){
+        bar.classList.remove('active');
+        bar.innerHTML='';
+        return;
+    }
+    bar.classList.add('active');
+    const relationPickActive=relationPickState.active && relationPickState.fromNodeId===node.id;
+    const metaText=relationPickActive ? t('previewRelationPickHint') : t('previewSelectionHint');
+    bar.innerHTML=`
+        <div>
+            <div class="preview-selection-title">${escapeHtml(t('previewSelectionPrefix'))}: ${escapeHtml(formatNodeLabel(node))}</div>
+            <div class="preview-selection-meta">${escapeHtml(metaText)}</div>
+        </div>
+        <div class="editor-actions">
+            <button class="zoom-fit-btn" onclick="seedPathComposerFromSelected()">${escapeHtml(t('pathComposerSeed'))}</button>
+            <button class="zoom-fit-btn" onclick="addNodeRelative('child')">${escapeHtml(t('addChild'))}</button>
+            <button class="zoom-fit-btn" onclick="addNodeRelative('sibling')">${escapeHtml(t('addSibling'))}</button>
+            <button class="zoom-fit-btn" onclick="togglePreviewRelationPick()">${escapeHtml(t(relationPickActive ? 'previewToolbarPickCancel' : 'previewToolbarPickRelation'))}</button>
+            <button class="zoom-fit-btn" onclick="deleteSelectedNode()">${escapeHtml(t('deleteNode'))}</button>
+        </div>`;
+}
+function closePreviewContextMenu(){
+    previewContextMenuState={visible:false,nodeId:null,x:0,y:0};
+    const menu=document.getElementById('previewContextMenu');
+    if(menu){
+        menu.classList.remove('open');
+        menu.innerHTML='';
+    }
+}
+function isNodeCollapsed(nodeId){
+    const node=workbookState?.nodesById?.get(nodeId);
+    return !!(node && collapsed.has(nodeKey(node)));
+}
+function toggleNodeCollapseById(nodeId){
+    const node=workbookState?.nodesById?.get(nodeId);
+    if(!node || !node.children.length) return;
+    const key=nodeKey(node);
+    collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key);
+    drawCanvasPreview(1);
+}
+function renderPreviewContextMenu(){
+    const menu=document.getElementById('previewContextMenu');
+    if(!menu) return;
+    const node=previewContextMenuState.visible ? workbookState?.nodesById?.get(previewContextMenuState.nodeId) : null;
+    if(!workbookState || workbookState.mode!=='v2' || !node){
+        menu.classList.remove('open');
+        menu.innerHTML='';
+        return;
+    }
+    const collapseAction=node.children.length ? `<button class="zoom-fit-btn" onclick="handlePreviewContextAction('toggle')">${escapeHtml(t(isNodeCollapsed(node.id) ? 'previewContextExpand' : 'previewContextCollapse'))}</button>` : '';
+    const pickAction=`<button class="zoom-fit-btn" onclick="handlePreviewContextAction('pick-relation')">${escapeHtml(t(relationPickState.active && relationPickState.fromNodeId===node.id ? 'previewToolbarPickCancel' : 'previewContextPickRelation'))}</button>`;
+    menu.innerHTML=`<div class="preview-context-title">${escapeHtml(t('previewContextTitle'))}</div><div class="editor-actions"><button class="zoom-fit-btn" onclick="handlePreviewContextAction('seed')">${escapeHtml(t('previewContextSeed'))}</button><button class="zoom-fit-btn" onclick="handlePreviewContextAction('child')">${escapeHtml(t('previewContextAddChild'))}</button><button class="zoom-fit-btn" onclick="handlePreviewContextAction('sibling')">${escapeHtml(t('previewContextAddSibling'))}</button>${pickAction}${collapseAction}<button class="zoom-fit-btn" onclick="handlePreviewContextAction('delete')">${escapeHtml(t('previewContextDelete'))}</button></div>`;
+    menu.classList.add('open');
+    menu.style.left='0px';
+    menu.style.top='0px';
+    const wrapper=document.getElementById('previewWrapper');
+    const maxLeft=Math.max(8, wrapper.clientWidth-menu.offsetWidth-8);
+    const maxTop=Math.max(8, wrapper.clientHeight-menu.offsetHeight-8);
+    menu.style.left=`${Math.max(8, Math.min(previewContextMenuState.x, maxLeft))}px`;
+    menu.style.top=`${Math.max(8, Math.min(previewContextMenuState.y, maxTop))}px`;
+}
+function hidePreviewNodeToolbar(){
+    const toolbar=document.getElementById('previewNodeToolbar');
+    if(!toolbar) return;
+    toolbar.classList.remove('open');
+    toolbar.innerHTML='';
+}
+function getHitBoxByNodeId(nodeId){
+    return hitBoxes.find(box=>box.node.id===nodeId) || null;
+}
+function renderPreviewNodeToolbar(){
+    const toolbar=document.getElementById('previewNodeToolbar');
+    if(!toolbar) return;
+    const node=getSelectedNode();
+    const box=node ? getHitBoxByNodeId(node.id) : null;
+    if(!workbookState || workbookState.mode!=='v2' || !node || !box){
+        hidePreviewNodeToolbar();
+        return;
+    }
+    const relationPickActive=relationPickState.active && relationPickState.fromNodeId===node.id;
+    const collapseAction=node.children.length ? `<button type="button" onclick="toggleNodeCollapseById('${escapeJs(node.id)}')">${escapeHtml(t(isNodeCollapsed(node.id) ? 'previewContextExpand' : 'previewContextCollapse'))}</button>` : '';
+    toolbar.innerHTML=`<button type="button" onclick="seedPathComposerFromSelected()">${escapeHtml(t('pathComposerSeed'))}</button><button type="button" onclick="addNodeRelative('child')">${escapeHtml(t('addChild'))}</button><button type="button" onclick="addNodeRelative('sibling')">${escapeHtml(t('addSibling'))}</button><button type="button" class="${relationPickActive ? 'toolbar-warn' : 'toolbar-accent'}" onclick="togglePreviewRelationPick()">${escapeHtml(t(relationPickActive ? 'previewToolbarPickCancel' : 'previewToolbarPickRelation'))}</button>${collapseAction}<button type="button" class="toolbar-danger" onclick="deleteSelectedNode()">${escapeHtml(t('deleteNode'))}</button>`;
+    toolbar.classList.add('open');
+    const wrapper=document.getElementById('previewWrapper');
+    const centerX=(box.x + box.w/2) * zoomScale + panX;
+    const topY=box.y * zoomScale + panY;
+    const bottomY=(box.y + box.h) * zoomScale + panY;
+    const maxLeft=Math.max(8, wrapper.clientWidth-toolbar.offsetWidth-8);
+    let left=Math.max(8, Math.min(centerX-(toolbar.offsetWidth/2), maxLeft));
+    let top=topY-toolbar.offsetHeight-10;
+    if(top<8) top=Math.min(bottomY+10, Math.max(8, wrapper.clientHeight-toolbar.offsetHeight-8));
+    toolbar.style.left=`${left}px`;
+    toolbar.style.top=`${top}px`;
+}
+function openPreviewContextMenu(nodeId, clientX, clientY){
+    if(!workbookState || workbookState.mode!=='v2' || !workbookState.nodesById.has(nodeId)) return;
+    const wrapper=document.getElementById('previewWrapper');
+    const rect=wrapper.getBoundingClientRect();
+    previewContextMenuState={visible:true,nodeId,x:clientX-rect.left,y:clientY-rect.top};
+    setSelectedNode(nodeId);
+}
+function handlePreviewContextAction(action){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const node=workbookState.nodesById.get(previewContextMenuState.nodeId || selectedNodeId);
+    if(!node){
+        closePreviewContextMenu();
+        return;
+    }
+    selectedNodeId=node.id;
+    switch(action){
+        case 'seed':
+            seedPathComposerFromSelected();
+            break;
+        case 'child':
+            addNodeRelative('child');
+            break;
+        case 'sibling':
+            addNodeRelative('sibling');
+            break;
+        case 'pick-relation':
+            togglePreviewRelationPick();
+            break;
+        case 'toggle':
+            toggleNodeCollapseById(node.id);
+            break;
+        case 'delete':
+            deleteSelectedNode();
+            break;
+    }
+    closePreviewContextMenu();
+}
+function setSelectedNode(nodeId, shouldRedraw=true){
+    if(!workbookState || workbookState.mode!=='v2'){
+        selectedNodeId=null;
+        return;
+    }
+    selectedNodeId=nodeId && workbookState.nodesById.has(nodeId) ? nodeId : null;
+    if(relationPickState.active && relationPickState.fromNodeId!==selectedNodeId){
+        relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+    }
+    const node=getSelectedNode();
+    if(node && node.pageGroup && workbookState.selectedPageGroup!==node.pageGroup && workbookState.slides.some(slide=>slide.pageGroup===node.pageGroup)){
+        workbookState.selectedPageGroup=node.pageGroup;
+        refreshSlideGroupSelect();
+    }
+    drawCanvasPreview(1);
+}
+function updateNodeFieldById(nodeId, field, value){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const row=getNodeRowById(nodeId);
+    if(!row) return;
+    row[field]=value;
+    selectedNodeId=nodeId;
+    rebuildWorkbookStateFromRows();
+}
+function updateSelectedNodeField(field, value){
+    const node=getSelectedNode();
+    if(!node) return;
+    updateNodeFieldById(node.id, field, value);
+}
+function updateSelectedNodeParent(parentId){
+    const node=getSelectedNode();
+    if(!node) return;
+    if(parentId===node.id){
+        alert(t('warnCycleParent'));
+        return;
+    }
+    let cursor=parentId ? workbookState.nodesById.get(parentId) : null;
+    while(cursor){
+        if(cursor.id===node.id){
+            alert(t('warnCycleParent'));
+            return;
+        }
+        cursor=cursor.parent;
+    }
+    updateNodeFieldById(node.id,'ParentID',parentId);
+}
+function buildUniqueNodeId(seed='NODE'){
+    const safeBase=String(seed).toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'NODE';
+    const used=new Set((workbookState?.nodesRows || []).map(getNodeIdFromRow));
+    if(!used.has(safeBase)) return safeBase;
+    let index=1;
+    while(used.has(`${safeBase}_${String(index).padStart(2,'0')}`)) index++;
+    return `${safeBase}_${String(index).padStart(2,'0')}`;
+}
+function getNextSortOrder(parentId){
+    const siblings=(workbookState?.nodesRows || []).filter(row=>String(row.ParentID || '')===String(parentId || ''));
+    const max=siblings.reduce((acc,row)=>Math.max(acc,normalizeInt(row.SortOrder,0) || 0),0);
+    return max + 10;
+}
+function addNodeRelative(kind){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const selected=getSelectedNode();
+    if(kind!=='root' && !selected) return;
+    const parentId=kind==='child' ? selected.id : kind==='sibling' ? (selected.parentId || '') : '';
+    const pageGroup=(selected && selected.pageGroup) || workbookState.selectedPageGroup || (workbookState.slides[0]?.pageGroup || '');
+    const nodeId=buildUniqueNodeId(pageGroup || 'NODE');
+    const newRow={
+        NodeID:nodeId,
+        ParentID:parentId,
+        Dept:t('newNodeDept'),
+        Name:t('newNodeName'),
+        Title:t('newNodeTitle'),
+        PageGroup:pageGroup,
+        SortOrder:String(getNextSortOrder(parentId)),
+        RoleType:'normal',
+        LayoutType:'standard',
+        LevelHint:'',
+        Color:'',
+        ShowInOverview:'true',
+        ShowInDetail:'true',
+        AliasOf:'',
+        OffsetX:'',
+        OffsetY:'',
+        WidthHint:'',
+        HeightHint:''
+    };
+    workbookState.nodesRows.push(newRow);
+    if(kind==='root'){
+        const currentSlideRow=workbookState.slidesRows.find(row=>String(row.PageGroup || '')===pageGroup);
+        if(currentSlideRow){
+            const previousRootId=String(currentSlideRow.RootNodeID || '').trim();
+            if(previousRootId){
+                const previousRootRow=getNodeRowById(previousRootId);
+                if(previousRootRow) previousRootRow.ParentID=nodeId;
+            }
+            currentSlideRow.RootNodeID=nodeId;
+        }
+    }
+    selectedNodeId=nodeId;
+    rebuildWorkbookStateFromRows();
+}
+function collectDescendantIds(rootId){
+    const ids=new Set();
+    const start=workbookState?.nodesById?.get(rootId);
+    if(!start) return ids;
+    (function walk(node){
+        ids.add(node.id);
+        node.children.forEach(walk);
+    })(start);
+    return ids;
+}
+function deleteSelectedNode(){
+    const node=getSelectedNode();
+    if(!node || !workbookState || workbookState.mode!=='v2') return;
+    const removedIds=collectDescendantIds(node.id);
+    workbookState.nodesRows=workbookState.nodesRows.filter(row=>!removedIds.has(getNodeIdFromRow(row)));
+    workbookState.edgesRows=workbookState.edgesRows.filter(row=>!removedIds.has(String(row.FromNodeID || row.fromNodeId || '').trim())&&!removedIds.has(String(row.ToNodeID || row.toNodeId || '').trim()));
+    workbookState.layoutRows=workbookState.layoutRows.filter(row=>!(String(row.TargetType || 'node')==='node' && removedIds.has(String(row.TargetID || '').trim())));
+    workbookState.slidesRows=workbookState.slidesRows.reduce((acc,row)=>{
+        const rootNodeId=String(row.RootNodeID || row.rootNodeId || '').trim();
+        if(!removedIds.has(rootNodeId)){
+            acc.push(row);
+            return acc;
+        }
+        const survivors=workbookState.nodesRows.filter(nodeRow=>String(nodeRow.PageGroup || '')===String(row.PageGroup || ''));
+        if(!survivors.length) return acc;
+        row.RootNodeID=getNodeIdFromRow(survivors.find(nodeRow=>!String(nodeRow.ParentID || '').trim()) || survivors[0]);
+        acc.push(row);
+        return acc;
+    },[]);
+    selectedNodeId=node.parentId && !removedIds.has(node.parentId) ? node.parentId : null;
+    rebuildWorkbookStateFromRows();
+}
+function addEdgeFromSelected(){
+    const node=getSelectedNode();
+    if(!node || !workbookState || workbookState.mode!=='v2') return;
+    const targetId=document.getElementById('relationTargetSelect')?.value || '';
+    const edgeType=document.getElementById('relationTypeSelect')?.value || 'dotted';
+    const pageScope=document.getElementById('relationScopeSelect')?.value || 'local';
+    const label=document.getElementById('relationLabelInput')?.value || '';
+    if(!targetId) return;
+    upsertEdgeRow({fromNodeId:node.id,toNodeId:targetId,edgeType,pageScope,label});
+    rebuildWorkbookStateFromRows();
+}
+function applyRelationBatchFromSelected(){
+    const node=getSelectedNode();
+    if(!node || !workbookState || workbookState.mode!=='v2') return;
+    const rawLines=String(relationBatchText || '').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    if(!rawLines.length){
+        alert(t('relationBatchNoValid'));
+        return;
+    }
+    let applied=0;
+    rawLines.forEach(line=>{
+        const parsed=parseRelationBatchLine(line,node.id);
+        if(!parsed) return;
+        const edgeId=upsertEdgeRow(parsed);
+        if(edgeId) applied++;
+    });
+    if(!applied){
+        alert(t('relationBatchNoValid'));
+        return;
+    }
+    alert(tf('relationBatchApplied',{count:applied,total:rawLines.length}));
+    rebuildWorkbookStateFromRows();
+}
+function removeEdgeById(edgeId){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    workbookState.edgesRows=workbookState.edgesRows.filter(row=>String(row.EdgeID || row.edgeId || '').trim()!==edgeId);
+    rebuildWorkbookStateFromRows();
+}
+function cloneTreeWithFilter(node, options={}, depth=1, parent=null){
+    const includeSelf = options.includeNode ? options.includeNode(node, depth) : true;
+    if(!includeSelf) return null;
+    const cloned={
+        id:node.id,
+        level:depth,
+        dept:node.dept,
+        name:node.name,
+        title:node.title,
+        bgColor:node.bgColor,
+        roleType:node.roleType,
+        layoutType:node.layoutType,
+        pageGroup:node.pageGroup,
+        sortOrder:node.sortOrder || 0,
+        children:[],
+        parent,
+        searchMatched:false,
+        searchHasMatch:false
+    };
+    const maxDepth=options.maxDepth ?? 999;
+    if(depth < maxDepth){
+        node.children
+            .slice()
+            .sort((a,b)=>a.sortOrder-b.sortOrder)
+            .forEach(child=>{
+                const c=cloneTreeWithFilter(child, options, depth+1, cloned);
+                if(c) cloned.children.push(c);
+            });
+    }
+    return cloned;
+}
+function refreshSlideGroupSelect(){
+    const row=document.getElementById('previewModeRow');
+    const sel=document.getElementById('slideGroupSelect');
+    if(!workbookState || workbookState.mode!=='v2' || !workbookState.slides.length){
+        row.style.display='none';
+        sel.innerHTML='';
+        renderPreviewModeSummary();
+        return;
+    }
+    row.style.display='flex';
+    sel.innerHTML=workbookState.slides.map(slide=>`<option value="${escapeHtml(slide.pageGroup)}">${escapeHtml(slide.slideTitle || slide.pageGroup)}</option>`).join('');
+    sel.value=workbookState.selectedPageGroup || workbookState.slides[0].pageGroup;
+    renderPreviewModeSummary();
+}
+function setEditorSheet(sheetName){
+    if(!workbookState) return;
+    workbookState.selectedEditorSheet=sheetName;
+    renderEditorPanel();
+}
+function renderEditorPanel(){
+    const panel=document.getElementById('editorPanel');
+    if(!panel) return;
+    if(!workbookState || workbookState.mode!=='v2'){
+        panel.style.display='none';
+        return;
+    }
+    panel.style.display='block';
+    const current=workbookState.selectedEditorSheet || 'Nodes';
+    document.getElementById('editorTabs').innerHTML=EDITOR_SHEETS.map(sheet=>`<button class="editor-tab ${sheet===current?'active':''}" onclick="setEditorSheet('${sheet}')">${escapeHtml(editorSheetLabel(sheet))}</button>`).join('');
+    const rows=getSheetRows(current);
+    if(!rows.length){
+        document.getElementById('editorTableWrap').innerHTML=`<div class="editor-empty">${escapeHtml(tf('editorEmpty',{sheet:editorSheetLabel(current)}))}</div>`;
+        return;
+    }
+    const headers=Object.keys(rows.reduce((acc,row)=>Object.assign(acc,row),{}));
+    const body=rows.map((row,rowIndex)=>{
+        const rowNodeId=current==='Nodes' ? getNodeIdFromRow(row) : '';
+        const rowClass=current==='Nodes' && rowNodeId===selectedNodeId ? ' class="selected"' : '';
+        const bodyCells=headers.map(header=>`<td><input value="${escapeHtml(row[header] ?? '')}" onchange="updateWorkbookCell('${current}',${rowIndex},'${header}',this.value)"></td>`).join('');
+        return `<tr${rowClass}${current==='Nodes' && rowNodeId ? ` onclick="setSelectedNode('${escapeJs(rowNodeId)}',false)"` : ''}>${bodyCells}</tr>`;
+    }).join('');
+    document.getElementById('editorTableWrap').innerHTML=`<table class="editor-table"><thead><tr>${headers.map(header=>`<th>${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+}
+function updateWorkbookCell(sheetName,rowIndex,field,value){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const rows=getSheetRows(sheetName);
+    if(!rows[rowIndex]) return;
+    rows[rowIndex][field]=value;
+    rebuildWorkbookStateFromRows();
+}
+function addEditorRow(){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const sheet=workbookState.selectedEditorSheet || 'Nodes';
+    getSheetRows(sheet).push(getSheetDefaults(sheet));
+    rebuildWorkbookStateFromRows();
+}
+function downloadWorkbookV2(){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const wb=buildWorkbookFromRows({
+        nodesRows:workbookState.nodesRows,
+        edgesRows:workbookState.edgesRows,
+        slidesRows:workbookState.slidesRows,
+        layoutRows:workbookState.layoutRows
+    });
+    XLSX.writeFile(wb,'OrgChart_V2_Workbook.xlsx');
+}
+function toggleLayoutEdit(){
+    layoutEditMode=!layoutEditMode;
+    updateDynamicLabels(lastModel || buildOrgModel());
+}
+function renderPreviewModeSummary(){
+    const el=document.getElementById('previewModeSummary');
+    if(!el) return;
+    if(workbookState && workbookState.mode==='v2') el.textContent=tf('previewModeV2',{count:workbookState.slides.length});
+    else el.textContent=t('previewModeLegacy');
+}
+function handleSlideGroupChange(){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    workbookState.selectedPageGroup=document.getElementById('slideGroupSelect').value;
+    selectedNodeId=null;
+    pathComposerState=[];
+    pathComposerBatchText='';
+    relationBatchText='';
+    relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+    closePreviewContextMenu();
+    ensureSelectedNodeForCurrentSlide();
+    collapsed.clear();
+    searchFocusPending=true;
+    drawCanvasPreview(1);
+}
+function clearWorkbookState(){
+    workbookState=null;
+    selectedNodeId=null;
+    pathComposerState=[];
+    pathComposerBatchText='';
+    relationBatchText='';
+    layoutEditMode=false;
+    relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+    closePreviewContextMenu();
+    hidePreviewNodeToolbar();
+    refreshSlideGroupSelect();
+}
+function buildLegacyModel(){
+    const colors=getThemeColors();
+    const issues=[],roots=[],stack={},signatureCounts=new Map();
+    const lines=document.getElementById('dataInput').value.split(/\r?\n/);
+    lines.forEach((rawLine,index)=>{
+        const lineNo=index+1;
+        const line=rawLine.trim();
+        if(!line) return;
+        const p=line.split(',').map(s=>s.trim());
+        if(p.length<4){
+            issues.push(createIssue('error','errColumns',lineNo));
+            return;
+        }
+        const level=parseInt(p[0],10);
+        if(!Number.isInteger(level)||level<1){
+            issues.push(createIssue('error','errLevel',lineNo));
+            return;
+        }
+        const dept=p[1]||'',name=p[2]||'',title=p[3]||'';
+        if(!dept) issues.push(createIssue('warning','warnMissingDept',lineNo));
+        if(!name) issues.push(createIssue('warning','warnMissingName',lineNo));
+        if(!title) issues.push(createIssue('warning','warnMissingTitle',lineNo));
+        let rawColor=p[4]?p[4].replace('#',''):null;
+        if(!rawColor||!/^[0-9A-Fa-f]{6}$/.test(rawColor)) rawColor=colors[Math.min(level-1,colors.length-1)];
+        const node={id:'line-'+lineNo,level,dept,name,title,bgColor:'#'+rawColor,children:[],parent:null,searchMatched:false,searchHasMatch:false};
+        const signature=[dept,name,title].join('::');
+        const nextCount=(signatureCounts.get(signature)||0)+1;
+        signatureCounts.set(signature,nextCount);
+        if(nextCount>1) issues.push(createIssue('warning','warnDuplicate',lineNo));
+        if(level===1){
+            roots.push(node);
+        } else {
+            let parentLevel=level-1;
+            while(parentLevel>=1&&!stack[parentLevel]) parentLevel--;
+            if(parentLevel!==level-1) issues.push(createIssue('warning','warnLevelJump',lineNo));
+            if(stack[parentLevel]){
+                node.parent=stack[parentLevel];
+                stack[parentLevel].children.push(node);
+            } else {
+                roots.push(node);
+                issues.push(createIssue('warning','warnRootFallback',lineNo));
+            }
+        }
+        stack[level]=node;
+        Object.keys(stack).forEach(k=>{ if(parseInt(k,10)>level) delete stack[k]; });
+    });
+    const model={roots,issues};
+    applySearchState(model);
+    lastModel=model;
+    return model;
+}
+function parseWorkbookV2(wb){
+    const issues=[];
+    const sheetNames=wb.SheetNames || [];
+    const nodesSheetName=findSheetName(sheetNames,'Nodes');
+    const slidesSheetName=findSheetName(sheetNames,'Slides');
+    const edgesSheetName=findSheetName(sheetNames,'Edges');
+    const layoutSheetName=findSheetName(sheetNames,'LayoutOverrides');
+    if(!nodesSheetName){
+        issues.push(createIssue('error','errNodesSheet','Workbook'));
+        return {mode:'v2',issues,nodesById:new Map(),slides:[],selectedPageGroup:'',allRoots:[],nodesRows:[],edgesRows:[],slidesRows:[],layoutRows:[],edges:[],layoutOverrideMap:new Map()};
+    }
+    if(!slidesSheetName){
+        issues.push(createIssue('error','errSlidesSheet','Workbook'));
+        return {mode:'v2',issues,nodesById:new Map(),slides:[],selectedPageGroup:'',allRoots:[],nodesRows:[],edgesRows:[],slidesRows:[],layoutRows:[],edges:[],layoutOverrideMap:new Map()};
+    }
+    const colors=getThemeColors();
+    const nodeRows=cloneRows(XLSX.utils.sheet_to_json(wb.Sheets[nodesSheetName],{defval:''}));
+    const slideRows=cloneRows(XLSX.utils.sheet_to_json(wb.Sheets[slidesSheetName],{defval:''}));
+    const edgeRows=edgesSheetName ? cloneRows(XLSX.utils.sheet_to_json(wb.Sheets[edgesSheetName],{defval:''})) : [];
+    const layoutRows=layoutSheetName ? cloneRows(XLSX.utils.sheet_to_json(wb.Sheets[layoutSheetName],{defval:''})) : [];
+    const nodesById=new Map();
+    nodeRows.forEach((row,index)=>{
+        const lineNo=`Nodes#${index+2}`;
+        const id=String(pickField(row,['NodeID','nodeId','節點ID'])).trim();
+        if(!id || nodesById.has(id)){
+            issues.push(createIssue('error','errNodeId',lineNo));
+            return;
+        }
+        const dept=String(pickField(row,['Dept','dept','部門'])).trim();
+        const name=String(pickField(row,['Name','name','姓名'])).trim();
+        const title=String(pickField(row,['Title','title','職稱'])).trim();
+        const pageGroup=String(pickField(row,['PageGroup','pageGroup','頁群組'])).trim();
+        const parentId=String(pickField(row,['ParentID','parentId','上層NodeID'])).trim();
+        const sortOrder=normalizeInt(pickField(row,['SortOrder','sortOrder','排序']),9999);
+        const roleType=String(pickField(row,['RoleType','roleType'])).trim() || 'normal';
+        const layoutType=String(pickField(row,['LayoutType','layoutType'])).trim() || 'standard';
+        const showInOverview=normalizeBool(pickField(row,['ShowInOverview','showInOverview']),true);
+        const showInDetail=normalizeBool(pickField(row,['ShowInDetail','showInDetail']),true);
+        let rawColor=String(pickField(row,['Color','color','顏色'])).trim().replace('#','');
+        const fallbackColor=colors[Math.min(Math.max(normalizeInt(pickField(row,['LevelHint','levelHint']),1)-1,0),colors.length-1)];
+        if(!rawColor || !/^[0-9A-Fa-f]{6}$/.test(rawColor)) rawColor=fallbackColor;
+        if(!dept) issues.push(createIssue('warning','warnMissingDept',lineNo));
+        if(!name) issues.push(createIssue('warning','warnMissingName',lineNo));
+        if(!title) issues.push(createIssue('warning','warnMissingTitle',lineNo));
+        nodesById.set(id,{
+            id,parentId,dept,name,title,pageGroup,sortOrder,roleType,layoutType,showInOverview,showInDetail,bgColor:'#'+rawColor,children:[],parent:null
+        });
+    });
+    const slides=slideRows.map((row,index)=>({
+        pageGroup:String(pickField(row,['PageGroup','pageGroup','頁群組'])).trim(),
+        slideTitle:String(pickField(row,['SlideTitle','slideTitle','投影片標題'])).trim(),
+        renderMode:String(pickField(row,['RenderMode','renderMode'])).trim() || 'subtree',
+        rootNodeId:String(pickField(row,['RootNodeID','rootNodeId'])).trim(),
+        maxDepth:normalizeInt(pickField(row,['MaxDepth','maxDepth']),999),
+        includeCrossLinks:normalizeBool(pickField(row,['IncludeCrossLinks','includeCrossLinks']),false),
+        slideOrder:normalizeInt(pickField(row,['SlideOrder','slideOrder']),index+1),
+        parentGroup:String(pickField(row,['ParentGroup','parentGroup'])).trim(),
+        layoutPreset:String(pickField(row,['LayoutPreset','layoutPreset'])).trim() || 'default',
+        overflowStrategy:String(pickField(row,['OverflowStrategy','overflowStrategy'])).trim() || 'split-by-child-group'
+    })).filter(slide=>slide.pageGroup);
+    slides.sort((a,b)=>a.slideOrder-b.slideOrder);
+    const edges=edgeRows.map((row,index)=>({
+        edgeId:String(pickField(row,['EdgeID','edgeId'])).trim() || `EDGE_${index+1}`,
+        fromNodeId:String(pickField(row,['FromNodeID','fromNodeId'])).trim(),
+        toNodeId:String(pickField(row,['ToNodeID','toNodeId'])).trim(),
+        edgeType:String(pickField(row,['EdgeType','edgeType'])).trim() || 'dotted',
+        pageScope:String(pickField(row,['PageScope','pageScope'])).trim() || 'local',
+        label:String(pickField(row,['Label','label'])).trim()
+    })).filter(edge=>edge.fromNodeId || edge.toNodeId);
+    const layoutOverrideMap=new Map();
+    layoutRows.forEach((row)=>{
+        const targetType=String(pickField(row,['TargetType','targetType'])).trim() || 'node';
+        const targetId=String(pickField(row,['TargetID','targetId'])).trim();
+        const pageGroup=String(pickField(row,['PageGroup','pageGroup'])).trim();
+        if(!targetId || !pageGroup) return;
+        layoutOverrideMap.set(`${targetType}::${pageGroup}::${targetId}`,{
+            targetType,
+            targetId,
+            pageGroup,
+            offsetX:Number(pickField(row,['OffsetX','offsetX']) || 0),
+            offsetY:Number(pickField(row,['OffsetY','offsetY']) || 0),
+            anchorMode:String(pickField(row,['AnchorMode','anchorMode'])).trim() || 'center',
+            zIndex:normalizeInt(pickField(row,['ZIndex','zIndex']),0)
+        });
+    });
+    nodesById.forEach((node)=>{
+        if(node.parentId){
+            const parent=nodesById.get(node.parentId);
+            if(!parent) issues.push(createIssue('error','errParentRef',`Nodes#${node.id}`));
+            else {
+                node.parent=parent;
+                parent.children.push(node);
+            }
+        }
+        if(!slides.some(slide=>slide.pageGroup===node.pageGroup)) issues.push(createIssue('error','errPageGroup',`Nodes#${node.id}`));
+    });
+    nodesById.forEach(node=>node.children.sort((a,b)=>a.sortOrder-b.sortOrder));
+    slides.forEach((slide,index)=>{
+        if(!slide.rootNodeId || !nodesById.has(slide.rootNodeId)) issues.push(createIssue('error','errSlideRoot',`Slides#${index+2}`));
+    });
+    edges.forEach((edge,index)=>{
+        if(!nodesById.has(edge.fromNodeId) || !nodesById.has(edge.toNodeId)) issues.push(createIssue('error','errEdgeRef',`Edges#${index+2}`));
+    });
+    const allRoots=[...nodesById.values()].filter(node=>!node.parent);
+    return {
+        mode:'v2',
+        issues,
+        nodesById,
+        slides,
+        edges,
+        layoutOverrideMap,
+        selectedPageGroup:slides[0] ? slides[0].pageGroup : '',
+        allRoots,
+        sourceWorkbook:wb,
+        nodesRows:nodeRows,
+        edgesRows:edgeRows,
+        slidesRows:slideRows,
+        layoutRows,
+        selectedEditorSheet:'Nodes'
+    };
+}
+function buildV2Model(){
+    const state=workbookState;
+    const selected=state && state.slides.find(slide=>slide.pageGroup===state.selectedPageGroup);
+    const slide=selected || (state && state.slides[0]) || null;
+    if(!slide){
+        const model={roots:[],issues:(state&&state.issues)||[],maxLevels:999,canvasTitle:t('emptyCanvas')};
+        applySearchState(model);
+        lastModel=model;
+        return model;
+    }
+    const root=state.nodesById.get(slide.rootNodeId);
+    if(!root){
+        const model={roots:[],issues:state.issues,maxLevels:slide.maxDepth||999,canvasTitle:slide.slideTitle||slide.pageGroup};
+        applySearchState(model);
+        lastModel=model;
+        return model;
+    }
+    const includeNode=(node, depth)=>{
+        if(slide.renderMode==='overview') return node.showInOverview !== false && node.layoutType!=='hidden-overview';
+        return node.showInDetail !== false;
+    };
+    const roots=[cloneTreeWithFilter(root,{maxDepth:slide.maxDepth||999,includeNode})].filter(Boolean);
+    const visibleIds=new Set();
+    (function collect(nodes){ nodes.forEach(node=>{ visibleIds.add(node.id); collect(node.children); }); })(roots);
+    const visibleEdges=state.edges.filter(edge=>visibleIds.has(edge.fromNodeId)&&visibleIds.has(edge.toNodeId)&&(edge.pageScope==='local'||edge.pageScope===slide.pageGroup||slide.renderMode!=='overview'));
+    const referenceEdges=state.edges.filter(edge=>(visibleIds.has(edge.fromNodeId)||visibleIds.has(edge.toNodeId))&&edge.pageScope==='cross-page');
+    const model={
+        roots,
+        issues:state.issues,
+        maxLevels:slide.maxDepth||999,
+        canvasTitle:slide.slideTitle || slide.pageGroup,
+        renderMode:slide.renderMode,
+        pageGroup:slide.pageGroup,
+        edges:visibleEdges,
+        referenceEdges,
+        exportSlide:slide
+    };
+    applySearchState(model);
+    lastModel=model;
+    return model;
+}
+function buildOrgModel(){
+    return workbookState && workbookState.mode==='v2' ? buildV2Model() : buildLegacyModel();
+}
+function nodeKey(n){ return n.id; }
+function applySearchState(model){
+    searchMatchIds=new Set();
+    searchContextIds=new Set();
+    const query=searchQuery.trim().toLowerCase();
+    let firstMatchId=null;
+    function walk(node){
+        const childMatch=node.children.map(walk).some(Boolean);
+        if(!query){
+            node.searchMatched=false;
+            node.searchHasMatch=false;
+            return false;
+        }
+        const haystack=[node.dept,node.name,node.title].join(' ').toLowerCase();
+        const selfMatch=haystack.includes(query);
+        node.searchMatched=selfMatch;
+        node.searchHasMatch=selfMatch||childMatch;
+        if(selfMatch){
+            searchMatchIds.add(node.id);
+            if(!firstMatchId) firstMatchId=node.id;
+            let cur=node;
+            while(cur){
+                searchContextIds.add(cur.id);
+                cur=cur.parent;
+            }
+        } else if(childMatch){
+            searchContextIds.add(node.id);
+        }
+        return node.searchHasMatch;
+    }
+    model.roots.forEach(walk);
+    model.firstMatchId=firstMatchId;
+}
+function buildIssueText(issue){
+    return tf(issue.code);
+}
+function renderValidationPanel(model){
+    const summary=document.getElementById('validationSummary');
+    const list=document.getElementById('validationList');
+    if(!model) return;
+    const errors=model.issues.filter(i=>i.severity==='error').length;
+    const warnings=model.issues.length-errors;
+    summary.textContent=model.issues.length ? tf('validationIssues',{count:model.issues.length,errors,warnings}) : t('validationOk');
+    list.innerHTML=model.issues.length ? model.issues.map(issue=>`
+        <div class="validation-item">
+            <span class="validation-badge ${issue.severity}">${escapeHtml(t(issue.severity==='error'?'severityError':'severityWarning'))}</span>
+            <div>${escapeHtml(buildIssueText(issue))}</div>
+            <span class="validation-meta">${escapeHtml(tf('issueLine',{line:issue.lineNo}))}</span>
+        </div>
+    `).join('') : `<div class="validation-item"><span class="validation-badge warning">${escapeHtml(t('severityWarning'))}</span><div>${escapeHtml(t('validationOk'))}</div></div>`;
+}
+function renderSearchSummary(model){
+    const summary=document.getElementById('searchSummary');
+    if(!summary||!model) return;
+    if(!searchQuery.trim()) summary.textContent=t('searchSummaryIdle');
+    else if(searchMatchIds.size) summary.textContent=tf('searchSummaryHits',{count:searchMatchIds.size});
+    else summary.textContent=t('searchSummaryMiss');
+}
+function getVisibleChildren(node,d,maxLevels,forExport){
+    if(d>=maxLevels) return [];
+    const forceExpand=!forExport&&searchQuery.trim()&&node.searchHasMatch;
+    return (!collapsed.has(nodeKey(node))||forceExpand)?node.children:[];
+}
+function calculateLayout(nodes,maxLevels,forExport=false){
+    let leafX=0,maxD=1;
+    function calc(node,d){
+        if(d>maxD) maxD=d;
+        node.renderY=(d-1)*(BASE_CARD_H+BASE_GAP_Y);
+        const visCh=getVisibleChildren(node,d,maxLevels,forExport);
+        if(!visCh.length){ node.renderX=leafX; leafX+=BASE_CARD_W+BASE_GAP_X; }
+        else { visCh.forEach(c=>calc(c,d+1)); node.renderX=(visCh[0].renderX+visCh[visCh.length-1].renderX)/2; }
+    }
+    nodes.forEach(r=>calc(r,1));
+    return {totalWidth:leafX,actualDepth:maxD};
+}
+function applyRoleLayoutAdjustments(nodes){
+    function walk(node){
+        if(node.layoutType==='sidecar' || node.roleType==='assistant' || node.roleType==='shared-service'){
+            node.renderX += 1.0;
+            node.renderY -= 0.18;
+        }
+        if(node.layoutType==='between'){
+            node.renderY -= 0.55;
+            node.renderX += 0.35;
+        }
+        if(node.layoutType==='stacked'){
+            node.renderY += 0.25;
+        }
+        if(node.roleType==='vacant'){
+            node.title = node.title || 'Vacant';
+        }
+        node.children.forEach(walk);
+    }
+    nodes.forEach(walk);
+}
+function getNodeOverride(pageGroup,nodeId){
+    if(!workbookState || workbookState.mode!=='v2') return null;
+    return workbookState.layoutOverrideMap.get(`node::${pageGroup}::${nodeId}`) || null;
+}
+function clampOverride(offset, exportMode){
+    if(exportMode!=='stable') return offset;
+    return Math.max(-0.8, Math.min(0.8, offset));
+}
+function applyLayoutOverrides(nodes,pageGroup,exportMode){
+    function walk(node){
+        const override=getNodeOverride(pageGroup,node.id);
+        node.overrideX=override ? clampOverride(Number(override.offsetX||0), exportMode) : 0;
+        node.overrideY=override ? clampOverride(Number(override.offsetY||0), exportMode) : 0;
+        node.renderX+=node.overrideX;
+        node.renderY+=node.overrideY;
+        node.children.forEach(walk);
+    }
+    nodes.forEach(walk);
+}
+function getVisibleNodeCount(nodes){
+    let count=0;
+    (function walk(list){ list.forEach(node=>{ count++; walk(node.children); }); })(nodes);
+    return count;
+}
+function buildAutoFocusSlides(roots, baseSlide){
+    const focusSlides=[];
+    roots.forEach(root=>{
+        root.children.forEach(child=>{
+            if((child.children && child.children.length>2) || child.roleType==='shared-service'){
+                focusSlides.push({
+                    pageGroup:`${baseSlide.pageGroup}_${child.id}`,
+                    slideTitle:`${baseSlide.slideTitle || baseSlide.pageGroup} - ${child.dept}`,
+                    renderMode:'focus',
+                    rootNodeId:child.id,
+                    maxDepth:999,
+                    includeCrossLinks:true,
+                    slideOrder:(baseSlide.slideOrder || 0) + focusSlides.length + 0.1,
+                    parentGroup:baseSlide.pageGroup,
+                    layoutPreset:baseSlide.layoutPreset || 'default',
+                    overflowStrategy:'none'
+                });
+            }
+        });
+    });
+    return focusSlides;
+}
+function buildExportSlides(state){
+    if(!state || state.mode!=='v2') return [];
+    const slides=[];
+    state.slides.forEach(slide=>{
+        slides.push(slide);
+        const root=state.nodesById.get(slide.rootNodeId);
+        if(!root) return;
+        const roots=[cloneTreeWithFilter(root,{maxDepth:slide.maxDepth||999,includeNode:(node)=>{
+            if(slide.renderMode==='overview') return node.showInOverview !== false && node.layoutType!=='hidden-overview';
+            return node.showInDetail !== false;
+        }})].filter(Boolean);
+        if(!roots.length) return;
+        applyRoleLayoutAdjustments(roots);
+        applyLayoutOverrides(roots,slide.pageGroup,getCurrentExportMode());
+        const li=calculateLayout(roots,slide.maxDepth||999,true);
+        const visibleCount=getVisibleNodeCount(roots);
+        const overflowed=(li.totalWidth>16 || li.actualDepth>5 || visibleCount>14) && slide.overflowStrategy==='split-by-child-group';
+        if(overflowed){
+            buildAutoFocusSlides(roots, slide).forEach(focus=>slides.push(focus));
+        }
+    });
+    return slides.sort((a,b)=>(a.slideOrder||0)-(b.slideOrder||0));
+}
+function getCurrentCanvasTitle(model){
+    return model.canvasTitle || translations[docLang].slideTitleObj;
+}
+
+// ══ Draw Helpers ══
+function drawRR(ctx,x,y,w,h,r){
+    r=Math.min(r,w/2,h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+}
+function fitText(ctx,text,maxW){
+    if(ctx.measureText(text).width<=maxW) return text;
+    while(text.length>1&&ctx.measureText(text+'…').width>maxW) text=text.slice(0,-1);
+    return text+'…';
+}
+function getTC(hex){
+    const h=hex.replace('#','');
+    const r=parseInt(h.substring(0,2),16)||10,g=parseInt(h.substring(2,4),16)||25,b=parseInt(h.substring(4,6),16)||47;
+    const light=(0.299*r+0.587*g+0.114*b)/255>0.55;
+    return {dept:light?'#1E293B':'#E2E8F0',name:light?'#0A192F':'#FFFFFF',icon:light?'#0A192F':'#64FFDA',border:light?'#94A3B8':'#64FFDA'};
+}
+function getPptTC(hex){
+    const h=hex.replace('#','');
+    const r=parseInt(h.substring(0,2),16)||10,g=parseInt(h.substring(2,4),16)||25,b=parseInt(h.substring(4,6),16)||47;
+    const light=(0.299*r+0.587*g+0.114*b)/255>0.55;
+    return {dept:light?'1E293B':'E2E8F0',name:light?'0A192F':'FFFFFF',border:light?'94A3B8':'64FFDA'};
+}
+function drawEmptyState(message){
+    const canvas=document.getElementById('previewCanvas'),ctx=canvas.getContext('2d');
+    canvas.width=900;
+    canvas.height=260;
+    canvas.style.width='900px';
+    canvas.style.height='260px';
+    ctx.fillStyle='#FFFFFF';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#64748B';
+    ctx.font='bold 22px "Microsoft JhengHei","PingFang TC",sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(message,canvas.width/2,canvas.height/2);
+}
+function findNodeById(nodes,id){
+    for(const node of nodes){
+        if(node.id===id) return node;
+        const found=findNodeById(node.children,id);
+        if(found) return found;
+    }
+    return null;
+}
+function findNodeCenter(node){
+    return {
+        x: node.renderX*PPI+PAD_X+(BASE_CARD_W*PPI/2),
+        y: node.renderY*PPI+PAD_Y+(BASE_CARD_H*PPI/2)
+    };
+}
+function findHitNode(clientX,clientY){
+    const w=document.getElementById('previewWrapper');
+    const wr=w.getBoundingClientRect();
+    const cx=(clientX-wr.left-panX)/zoomScale,cy=(clientY-wr.top-panY)/zoomScale;
+    for(const box of hitBoxes){
+        if(cx>=box.x&&cx<=box.x+box.w&&cy>=box.y&&cy<=box.y+box.h) return box;
+    }
+    return null;
+}
+function syncLayoutOverrideRow(pageGroup,nodeId,offsetX,offsetY){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    const key=`node::${pageGroup}::${nodeId}`;
+    let row=workbookState.layoutRows.find(r=>String(r.TargetType||'node')==='node'&&String(r.TargetID||'')===nodeId&&String(r.PageGroup||'')===pageGroup);
+    if(!row){
+        row={TargetType:'node',TargetID:nodeId,PageGroup:pageGroup,OffsetX:'0',OffsetY:'0',AnchorMode:'center',ZIndex:'0'};
+        workbookState.layoutRows.push(row);
+    }
+    row.OffsetX=String(Number(offsetX.toFixed(3)));
+    row.OffsetY=String(Number(offsetY.toFixed(3)));
+    workbookState.layoutOverrideMap.set(key,{targetType:'node',targetId:nodeId,pageGroup,offsetX:Number(row.OffsetX),offsetY:Number(row.OffsetY),anchorMode:'center',zIndex:0});
+    workbookState.sourceWorkbook=buildWorkbookFromRows({
+        nodesRows:workbookState.nodesRows,
+        edgesRows:workbookState.edgesRows,
+        slidesRows:workbookState.slidesRows,
+        layoutRows:workbookState.layoutRows
+    });
+    renderEditorPanel();
+}
+function drawEdges(ctx,model){
+    if(!model.edges || !model.edges.length) return;
+    model.edges.forEach(edge=>{
+        const from=findNodeById(model.roots,edge.fromNodeId);
+        const to=findNodeById(model.roots,edge.toNodeId);
+        if(!from || !to) return;
+        const p1=findNodeCenter(from), p2=findNodeCenter(to);
+        ctx.save();
+        if(edge.edgeType==='dotted' || edge.edgeType==='reference') ctx.setLineDash([8,6]);
+        else if(edge.edgeType==='advisory') ctx.setLineDash([4,4]);
+        ctx.strokeStyle=edge.edgeType==='project' ? '#7C3AED' : edge.edgeType==='advisory' ? '#F59E0B' : '#94A3B8';
+        ctx.lineWidth=edge.edgeType==='project' ? 2.5 : 2;
+        ctx.beginPath();
+        ctx.moveTo(p1.x,p1.y);
+        ctx.bezierCurveTo(p1.x,p1.y+30,p2.x,p2.y-30,p2.x,p2.y);
+        ctx.stroke();
+        if(edge.label){
+            ctx.fillStyle='#334155';
+            ctx.font='11px "Microsoft JhengHei","PingFang TC",sans-serif';
+            ctx.textAlign='center';
+            ctx.textBaseline='bottom';
+            ctx.fillText(edge.label,(p1.x+p2.x)/2,((p1.y+p2.y)/2)-6);
+        }
+        ctx.restore();
+    });
+    if(model.referenceEdges && model.referenceEdges.length && model.renderMode==='overview'){
+        ctx.save();
+        ctx.fillStyle='#B45309';
+        ctx.font='bold 11px "Microsoft JhengHei","PingFang TC",sans-serif';
+        model.referenceEdges.forEach(edge=>{
+            const from=findNodeById(model.roots,edge.fromNodeId) || findNodeById(model.roots,edge.toNodeId);
+            if(!from) return;
+            const p=findNodeCenter(from);
+            ctx.fillText(`↗ ${dt('crossRefShort')}`,p.x+38,p.y-24);
+        });
+        ctx.restore();
+    }
+}
+function centerNodeInView(node){
+    const wrapper=document.getElementById('previewWrapper');
+    const nodeCenterX=node.renderX*PPI+PAD_X+(BASE_CARD_W*PPI/2);
+    const nodeCenterY=node.renderY*PPI+PAD_Y+(BASE_CARD_H*PPI/2);
+    panX=wrapper.clientWidth/2-nodeCenterX*zoomScale;
+    panY=wrapper.clientHeight/2-nodeCenterY*zoomScale;
+    applyTransform();
+}
+function cloneNodesForExport(nodes){
+    return nodes.map(node=>({
+        id:node.id,
+        level:node.level,
+        dept:node.dept,
+        name:node.name,
+        title:node.title,
+        bgColor:node.bgColor,
+        roleType:node.roleType,
+        layoutType:node.layoutType,
+        sortOrder:node.sortOrder || 0,
+        children:cloneNodesForExport(node.children)
+    }));
+}
+
+// ══ Canvas Draw ══
+function drawCanvasPreview(scale=1,forExport=false){
+    const model=buildOrgModel();
+    const roots=model.roots;
+    updateDynamicLabels(model);
+    if(!roots.length){
+        if(scale===1 && !forExport) closePreviewContextMenu();
+        if(scale===1 && !forExport) hidePreviewNodeToolbar();
+        drawEmptyState(t('emptyCanvas'));
+        return model;
+    }
+    applyRoleLayoutAdjustments(roots);
+    applyLayoutOverrides(roots,model.pageGroup || '',getCurrentExportMode());
+    const li=calculateLayout(roots,model.maxLevels||999,forExport);
+    const canvas=document.getElementById('previewCanvas'),ctx=canvas.getContext('2d');
+    const logW=li.totalWidth*PPI+PAD_X*2;
+    const logH=(li.actualDepth*BASE_CARD_H+(li.actualDepth-1)*BASE_GAP_Y)*PPI+PAD_Y*2;
+    canvas.width=logW*scale; canvas.height=logH*scale;
+    canvas.style.width=logW+'px'; canvas.style.height=logH+'px';
+    ctx.scale(scale,scale);
+
+    ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,logW,logH);
+    ctx.fillStyle='#0A192F';
+    ctx.font='bold 20px "Microsoft JhengHei","PingFang TC","Helvetica Neue",sans-serif';
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(getCurrentCanvasTitle(model), PAD_X, 14);
+
+    if(logoBase64&&logoImg.complete&&logoImg.naturalWidth>0){
+        const maxLW=180,maxLH=55;
+        const lr=Math.min(maxLW/logoImg.naturalWidth,maxLH/logoImg.naturalHeight,1);
+        ctx.drawImage(logoImg,logW-logoImg.naturalWidth*lr-PAD_X,8,logoImg.naturalWidth*lr,logoImg.naturalHeight*lr);
+    }
+
+    if(scale===1) hitBoxes=[];
+    function drawNode(node){
+        const cX=node.renderX*PPI+PAD_X,cY=node.renderY*PPI+PAD_Y,cW=BASE_CARD_W*PPI,cH=BASE_CARD_H*PPI;
+        const isC=collapsed.has(nodeKey(node));
+        const tc=getTC(node.bgColor);
+        const isSearchActive=!forExport&&!!searchQuery.trim();
+        const isMatch=isSearchActive&&searchMatchIds.has(node.id);
+        const isSelected=!forExport&&node.id===selectedNodeId;
+        const inContext=!isSearchActive||searchContextIds.has(node.id);
+        const forceExpand=isSearchActive&&node.searchHasMatch;
+        if(scale===1) hitBoxes.push({x:cX,y:cY,w:cW,h:cH,node});
+
+        const visibleChildren=getVisibleChildren(node, node.level, model.maxLevels||999, forExport);
+        if(visibleChildren.length>0&&(!isC||forceExpand)){
+            const pBY=cY+cH,chTY=visibleChildren[0].renderY*PPI+PAD_Y,mY=pBY+(chTY-pBY)/2,pCX=cX+cW/2;
+            ctx.strokeStyle='#CBD5E1'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(pCX,pBY); ctx.lineTo(pCX,mY); ctx.stroke();
+            const fCX=visibleChildren[0].renderX*PPI+PAD_X+cW/2,lCX=visibleChildren[visibleChildren.length-1].renderX*PPI+PAD_X+cW/2;
+            ctx.beginPath(); ctx.moveTo(fCX,mY); ctx.lineTo(lCX,mY); ctx.stroke();
+            visibleChildren.forEach(ch=>{
+                ctx.beginPath(); ctx.moveTo(ch.renderX*PPI+PAD_X+cW/2,mY); ctx.lineTo(ch.renderX*PPI+PAD_X+cW/2,chTY); ctx.stroke();
+                drawNode(ch);
+            });
+        }
+        ctx.globalAlpha=inContext?1:0.22;
+        ctx.fillStyle=node.bgColor;
+        ctx.strokeStyle=isMatch ? '#F59E0B' : isSelected ? '#0F766E' : tc.border;
+        ctx.lineWidth=(isMatch || isSelected) ? 4 : 2;
+        if(node.roleType==='vacant') ctx.setLineDash([6,4]);
+        drawRR(ctx,cX,cY,cW,cH,5); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+
+        if(node.children.length>0){
+            ctx.fillStyle=tc.icon; ctx.font='bold 10px Arial';
+            ctx.textAlign='right'; ctx.textBaseline='top';
+            ctx.fillText(isC&&!forceExpand?'▶':'▼',cX+cW-5,cY+5);
+        }
+
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.font='bold 13px "Microsoft JhengHei","PingFang TC",sans-serif';
+        ctx.fillStyle=tc.dept; ctx.fillText(fitText(ctx,node.dept,cW-14),cX+cW/2,cY+cH*0.35);
+        ctx.font='12px "Microsoft JhengHei","PingFang TC",sans-serif';
+        const nameLine=node.roleType==='vacant' ? `${dt('vacantPrefix')} ${node.title||''}` : `${node.name} (${node.title})`;
+        ctx.fillStyle=tc.name; ctx.fillText(fitText(ctx,nameLine,cW-10),cX+cW/2,cY+cH*0.68);
+        ctx.globalAlpha=1;
+    }
+    roots.forEach(r=>drawNode(r));
+    drawEdges(ctx,model);
+    if(scale===1&&!forExport&&searchFocusPending&&model.firstMatchId){
+        const target=findNodeById(roots,model.firstMatchId);
+        if(target) centerNodeInView(target);
+        searchFocusPending=false;
+    }
+    if(scale===1 && !forExport){
+        renderPreviewNodeToolbar();
+        renderPreviewContextMenu();
+    }
+    return model;
+}
+
+// ══ Click expand/collapse ══
+function handleCanvasClick(e){
+    if(e.target.closest('#previewNodeToolbar') || e.target.closest('#previewContextMenu')) return;
+    closePreviewContextMenu();
+    if(layoutEditMode && workbookState && workbookState.mode==='v2') return;
+    if(isDragging||draggedDistance>4) return;
+    const w=document.getElementById('previewWrapper');
+    const wr=w.getBoundingClientRect();
+    const cx=(e.clientX-wr.left-panX)/zoomScale,cy=(e.clientY-wr.top-panY)/zoomScale;
+    for(const box of hitBoxes){
+        if(cx>=box.x&&cx<=box.x+box.w&&cy>=box.y&&cy<=box.y+box.h){
+            if(workbookState && workbookState.mode==='v2'){
+                if(relationPickState.active){
+                    if(box.node.id===relationPickState.fromNodeId){
+                        cancelPreviewRelationPick();
+                        break;
+                    }
+                    const edgeId=upsertEdgeRow({
+                        fromNodeId:relationPickState.fromNodeId,
+                        toNodeId:box.node.id,
+                        edgeType:relationPickState.edgeType,
+                        pageScope:relationPickState.pageScope,
+                        label:''
+                    });
+                    relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+                    if(edgeId){
+                        selectedNodeId=box.node.id;
+                        rebuildWorkbookStateFromRows();
+                    } else {
+                        drawCanvasPreview(1);
+                    }
+                    break;
+                }
+                if(selectedNodeId===box.node.id && box.node.children.length>0){
+                    toggleNodeCollapseById(box.node.id);
+                } else {
+                    setSelectedNode(box.node.id);
+                }
+                break;
+            }
+            if(box.node.children.length>0){
+                const k=nodeKey(box.node);
+                collapsed.has(k)?collapsed.delete(k):collapsed.add(k);
+                drawCanvasPreview(1);
+            }
+            break;
+        }
+    }
+}
+
+// ══ Dept Select for PPT ══
+function refreshDeptSelect(){
+    const roots=buildOrgModel().roots,sel=document.getElementById('deptSelect');
+    sel.innerHTML='';
+    function addOpts(node,d){ const o=document.createElement('option'); o.value=nodeKey(node); o.textContent='　'.repeat(d-1)+node.dept+' ('+node.name+')'; sel.appendChild(o); node.children.forEach(c=>addOpts(c,d+1)); }
+    roots.forEach(r=>addOpts(r,1));
+}
+function handleSearchInput(){
+    searchQuery=document.getElementById('searchInput').value;
+    searchFocusPending=true;
+    drawCanvasPreview(1);
+}
+function clearSearch(){
+    searchQuery='';
+    document.getElementById('searchInput').value='';
+    searchFocusPending=false;
+    drawCanvasPreview(1);
+}
+function setTextareaForWorkbook(state){
+    const lines=[];
+    lines.push(t('workbookLoaded'));
+    lines.push(tf('workbookSlides',{count:state.slides.length}));
+    state.slides.forEach(slide=>lines.push(`- ${slide.pageGroup}: ${slide.slideTitle || slide.rootNodeId}`));
+    lines.push(t('workbookHint'));
+    document.getElementById('dataInput').value=lines.join('\n');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+    document.getElementById('pptModeSelect').addEventListener('change',function(){ document.getElementById('deptSelect').style.display=this.value==='dept'?'inline-block':'none'; });
+});
+
+// ══ Export ══
+function downloadPNG(){
+    if(isExporting) return; isExporting=true;
+    drawCanvasPreview(3,true);
+    const a=document.createElement('a'); a.download='OrgChart_HiRes.png';
+    a.href=document.getElementById('previewCanvas').toDataURL('image/png',1.0); a.click();
+    setTimeout(()=>{ drawCanvasPreview(1,false); isExporting=false; },100);
+}
+function downloadPDF(){
+    if(isExporting) return; isExporting=true;
+    drawCanvasPreview(3,true);
+    const c=document.getElementById('previewCanvas');
+    const {jsPDF}=window.jspdf;
+    const lW=c.width/3,lH=c.height/3;
+    const pdf=new jsPDF({unit:'px',format:[lW,lH]});
+    pdf.addImage(c.toDataURL('image/png',1.0),'PNG',0,0,lW,lH);
+    const payload=serializeWorkbookPayload();
+    if(payload){
+        const encoded=encodeMetadataPayload(payload);
+        pdf.setProperties({title:'Org Chart',subject:'Org Generator Export',keywords:encoded.slice(0,240)});
+        pdf.setFontSize(1);
+        pdf.setTextColor(255,255,255);
+        pdf.text(encoded,2,lH-2,{maxWidth:lW-4});
+    }
+    pdf.save('OrgChart_HiRes.pdf');
+    setTimeout(()=>{ drawCanvasPreview(1,false); isExporting=false; },100);
+}
+function generatePPT(){
+    if(workbookState && workbookState.mode==='v2'){
+        let pres=new PptxGenJS(); pres.layout='LAYOUT_16x9';
+        const SW=9.5,SH=4.5;
+        const exportMode=getCurrentExportMode();
+        const payload=serializeWorkbookPayload();
+        const encodedPayload=payload ? encodeMetadataPayload(payload) : '';
+        buildExportSlides(workbookState).forEach(slide=>{
+            const root=workbookState.nodesById.get(slide.rootNodeId);
+            if(!root) return;
+            const roots=[cloneTreeWithFilter(root,{maxDepth:slide.maxDepth||999,includeNode:(node)=>{
+                if(slide.renderMode==='overview') return node.showInOverview !== false && node.layoutType!=='hidden-overview';
+                return node.showInDetail !== false;
+            }})].filter(Boolean);
+            const cloned=cloneNodesForExport(roots);
+            applyRoleLayoutAdjustments(cloned);
+            applyLayoutOverrides(cloned,slide.pageGroup,exportMode);
+            const li=calculateLayout(cloned,slide.maxDepth||999,true);
+            const tH=li.actualDepth*BASE_CARD_H+(li.actualDepth-1)*BASE_GAP_Y;
+            const sc=Math.min(1.0,SW/li.totalWidth,SH/tH);
+            const CW=BASE_CARD_W*sc,CH=BASE_CARD_H*sc;
+            const offX=(10-li.totalWidth*sc)/2,offY=1.2;
+            const pptSlide=pres.addSlide();
+            pptSlide.addText(slide.slideTitle || slide.pageGroup,{x:0.5,y:0.3,w:'80%',h:0.8,fontSize:22,bold:true,color:'0A192F'});
+            if(logoBase64&&logoImg.complete) pptSlide.addImage({data:logoBase64,x:8.0,y:0.2,w:1.5,h:0.8,sizing:{type:'contain'}});
+            if(encodedPayload){
+                pptSlide.addText(encodedPayload,{x:0.01,y:7.0,w:0.2,h:0.1,fontSize:1,color:'FFFFFF',margin:0});
+            }
+            function drawN(node,depth){
+                const fx=node.renderX*sc+offX,fy=node.renderY*sc+offY;
+                const visCh=depth<(slide.maxDepth||999)?node.children:[];
+                const tc=getPptTC(node.bgColor);
+                if(visCh.length>0){
+                    const pBY=fy+CH,cTY=visCh[0].renderY*sc+offY,mY=pBY+(cTY-pBY)/2,pCX=fx+CW/2;
+                    pptSlide.addShape(pres.ShapeType.line,{x:pCX,y:pBY,w:0,h:mY-pBY,line:{color:'CBD5E1',width:1.5}});
+                    const fCX=visCh[0].renderX*sc+offX+CW/2,lCX=visCh[visCh.length-1].renderX*sc+offX+CW/2;
+                    if(lCX-fCX>0) pptSlide.addShape(pres.ShapeType.line,{x:fCX,y:mY,w:lCX-fCX,h:0,line:{color:'CBD5E1',width:1.5}});
+                    visCh.forEach(ch=>{ pptSlide.addShape(pres.ShapeType.line,{x:ch.renderX*sc+offX+CW/2,y:mY,w:0,h:cTY-mY,line:{color:'CBD5E1',width:1.5}}); drawN(ch,depth+1); });
+                }
+                if(exportMode==='styled' && slide.renderMode==='overview' && workbookState.edges){
+                    workbookState.edges.filter(edge=>(edge.fromNodeId===node.id||edge.toNodeId===node.id)&&edge.pageScope==='cross-page').forEach((edge,idx)=>{
+                        pptSlide.addText(dt('crossRefShort'),{x:fx+CW-0.3,y:fy+0.05+(idx*0.12),w:0.35,h:0.1,fontSize:7,color:'B45309'});
+                    });
+                }
+                const lineOptions=node.roleType==='vacant' ? {color:tc.border,width:1.0,dash:'dash'} : {color:tc.border,width:1.0};
+                pptSlide.addShape(pres.ShapeType.rect,{x:fx,y:fy,w:CW,h:CH,fill:{color:node.bgColor.replace('#','')},line:lineOptions});
+                pptSlide.addText([
+                    {text:node.dept+'\n',options:{fontSize:Math.max(7,10*sc),color:tc.dept,bold:true}},
+                    {text:(node.roleType==='vacant' ? `${dt('vacantPrefix')} ${node.title||''}` : `${node.name} (${node.title})`),options:{fontSize:Math.max(8,11*sc),color:tc.name}}
+                ],{x:fx,y:fy,w:CW,h:CH,align:'center',valign:'middle'});
+            }
+            cloned.forEach(r=>drawN(r,1));
+            const visibleIds=new Set();
+            (function collect(nodes){ nodes.forEach(node=>{ visibleIds.add(node.id); collect(node.children); }); })(cloned);
+            workbookState.edges.filter(edge=>visibleIds.has(edge.fromNodeId)&&visibleIds.has(edge.toNodeId)).forEach(edge=>{
+                const from=findNodeById(cloned,edge.fromNodeId);
+                const to=findNodeById(cloned,edge.toNodeId);
+                if(!from || !to) return;
+                const p1={x:from.renderX*sc+offX+CW/2,y:from.renderY*sc+offY+CH/2};
+                const p2={x:to.renderX*sc+offX+CW/2,y:to.renderY*sc+offY+CH/2};
+                pptSlide.addShape(pres.ShapeType.line,{
+                    x:Math.min(p1.x,p2.x),
+                    y:Math.min(p1.y,p2.y),
+                    w:Math.abs(p2.x-p1.x) || 0.01,
+                    h:Math.abs(p2.y-p1.y) || 0.01,
+                    line:{
+                        color:edge.edgeType==='project' ? '7C3AED' : edge.edgeType==='advisory' ? 'F59E0B' : '94A3B8',
+                        width:1.2,
+                        dash:(edge.edgeType==='dotted'||edge.edgeType==='reference'||edge.edgeType==='advisory') ? 'dash' : 'solid'
+                    }
+                });
+            });
+        });
+        pres.writeFile({fileName:'OrgChart_V2_Output.pptx'});
+        return;
+    }
+    const allRoots=buildOrgModel().roots; if(!allRoots.length) return;
+    const mode=document.getElementById('pptModeSelect').value;
+    let pres=new PptxGenJS(); pres.layout='LAYOUT_16x9';
+    const SW=9.5,SH=4.5;
+    function renderSlide(nodesToRender,slideTitle,maxLevels){
+        const cloned=cloneNodesForExport(nodesToRender);
+        const li=calculateLayout(cloned,maxLevels,true);
+        const tH=li.actualDepth*BASE_CARD_H+(li.actualDepth-1)*BASE_GAP_Y;
+        const sc=Math.min(1.0,SW/li.totalWidth,SH/tH);
+        const CW=BASE_CARD_W*sc,CH=BASE_CARD_H*sc;
+        const offX=(10-li.totalWidth*sc)/2,offY=1.2;
+        const slide=pres.addSlide();
+        slide.addText(slideTitle,{x:0.5,y:0.3,w:'80%',h:0.8,fontSize:22,bold:true,color:'0A192F'});
+        if(logoBase64&&logoImg.complete) slide.addImage({data:logoBase64,x:8.0,y:0.2,w:1.5,h:0.8,sizing:{type:'contain'}});
+        function drawN(node,depth){
+            const fx=node.renderX*sc+offX,fy=node.renderY*sc+offY;
+            const visCh=depth<maxLevels?node.children:[];
+            const tc=getPptTC(node.bgColor);
+            if(visCh.length>0){
+                const pBY=fy+CH,cTY=visCh[0].renderY*sc+offY,mY=pBY+(cTY-pBY)/2,pCX=fx+CW/2;
+                slide.addShape(pres.ShapeType.line,{x:pCX,y:pBY,w:0,h:mY-pBY,line:{color:'CBD5E1',width:1.5}});
+                const fCX=visCh[0].renderX*sc+offX+CW/2,lCX=visCh[visCh.length-1].renderX*sc+offX+CW/2;
+                if(lCX-fCX>0) slide.addShape(pres.ShapeType.line,{x:fCX,y:mY,w:lCX-fCX,h:0,line:{color:'CBD5E1',width:1.5}});
+                visCh.forEach(ch=>{ slide.addShape(pres.ShapeType.line,{x:ch.renderX*sc+offX+CW/2,y:mY,w:0,h:cTY-mY,line:{color:'CBD5E1',width:1.5}}); drawN(ch,depth+1); });
+            } else if(depth===maxLevels&&node.children.length>0){
+                slide.addText('▼',{x:fx,y:fy+CH,w:CW,h:0.25,fontSize:Math.max(8,14*sc),color:'64FFDA',align:'center',valign:'middle',fontFace:'Arial'});
+            }
+            slide.addShape(pres.ShapeType.rect,{x:fx,y:fy,w:CW,h:CH,fill:{color:node.bgColor.replace('#','')},line:{color:tc.border,width:1.0}});
+            slide.addText([
+                {text:node.dept+'\n',options:{fontSize:Math.max(7,10*sc),color:tc.dept,bold:true}},
+                {text:node.name+' ('+node.title+')',options:{fontSize:Math.max(8,11*sc),color:tc.name}}
+            ],{x:fx,y:fy,w:CW,h:CH,align:'center',valign:'middle'});
+        }
+        cloned.forEach(r=>drawN(r,1));
+    }
+    
+    // 🌟 輸出 PPT 時使用內容語言的標題
+    if(mode==='single'){
+        renderSlide(allRoots, translations[docLang].slideTitleObj, 999);
+    } else if(mode==='dept'){
+        const sk=document.getElementById('deptSelect').value;
+        function findNode(nodes,key){ for(const n of nodes){ if(nodeKey(n)===key) return n; const f=findNode(n.children,key); if(f) return f; } return null; }
+        const target=findNode(allRoots,sk);
+        renderSlide(target?[target]:allRoots, target ? translations[docLang].slideTitleDept + target.dept : translations[docLang].slideTitleObj, 999);
+    } else {
+        const testC=cloneNodesForExport(allRoots);
+        const tl=calculateLayout(testC,999,true);
+        const gS=Math.min(1.0,SW/tl.totalWidth,SH/(tl.actualDepth*BASE_CARD_H+(tl.actualDepth-1)*BASE_GAP_Y));
+        if(gS<0.6){
+            renderSlide(allRoots, translations[docLang].slideTitleOverview, 2);
+            allRoots.forEach(r=>r.children.forEach(d=>{ if(d.children.length>0) renderSlide([d], translations[docLang].slideTitleDept + d.dept, 999); }));
+        } else {
+            renderSlide(allRoots, translations[docLang].slideTitleObj, 999);
+        }
+    }
+    pres.writeFile({fileName:'OrgChart_Output.pptx'});
+}
+
+// ══ Excel Template ══
+function downloadExcelTemplate(){
+    const wb=XLSX.utils.book_new();
+    const data=[['Level','Dept','Name','Title'],[1,'總公司','王大明','CEO'],[2,'產品技術處','陳小華','技術長'],[3,'軟體開發部','林阿呆','經理'],[3,'系統維運部','李大方','經理'],[2,'全球業務處','張大帥','營運長'],[3,'國內業務','孫六','經理'],[4,'北區組','周七','專員'],[3,'海外業務','鄭九','經理']];
+    const ws=XLSX.utils.aoa_to_sheet(data); ws['!cols']=[{wch:8},{wch:16},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'OrgChart');
+    const nodesSheet=XLSX.utils.aoa_to_sheet([
+        ['NodeID','ParentID','Dept','Name','Title','PageGroup','SortOrder','RoleType','LayoutType','LevelHint','Color','ShowInOverview','ShowInDetail'],
+        ['N001','','HQ','John Doe','CEO','OVR',10,'normal','standard',1,'',true,true],
+        ['N002','N001','Strategy Office','Amy Lin','Chief of Staff','OVR',20,'assistant','sidecar',2,'',true,true],
+        ['N003','N001','R&D','Jane Smith','CTO','RD',30,'normal','standard',2,'',true,true],
+        ['N004','N003','Platform','Kevin Wu','Director','RD',40,'normal','standard',3,'',true,true],
+        ['N005','N001','Sales','Tom Clark','CRO','SALES',50,'normal','standard',2,'',true,true]
+    ]);
+    const slidesSheet=XLSX.utils.aoa_to_sheet([
+        ['PageGroup','SlideTitle','RenderMode','RootNodeID','MaxDepth','SlideOrder','IncludeCrossLinks','OverflowStrategy'],
+        ['OVR','Executive Overview','overview','N001',2,10,false,'split-by-child-group'],
+        ['RD','R&D Organization','subtree','N003',5,20,true,'split-by-child-group'],
+        ['SALES','Sales Organization','subtree','N005',5,30,true,'split-by-child-group']
+    ]);
+    const edgesSheet=XLSX.utils.aoa_to_sheet([
+        ['EdgeID','FromNodeID','ToNodeID','EdgeType','PageScope','Label'],
+        ['E001','N003','N005','dotted','cross-page','Shared support']
+    ]);
+    const overridesSheet=XLSX.utils.aoa_to_sheet([
+        ['TargetType','TargetID','PageGroup','OffsetX','OffsetY','AnchorMode','ZIndex'],
+        ['node','N002','OVR',0.35,-0.15,'center',0]
+    ]);
+    const ws2=XLSX.utils.aoa_to_sheet([['欄位','說明'],['Level','層級數字，1=最高層'],['Dept','部門名稱'],['Name','負責人姓名'],['Title','職稱'],['顏色','不需填寫，上傳後在網頁主題選擇器選取']]);
+    ws2['!cols']=[{wch:10},{wch:30}];
+    XLSX.utils.book_append_sheet(wb,nodesSheet,'Nodes');
+    XLSX.utils.book_append_sheet(wb,slidesSheet,'Slides');
+    XLSX.utils.book_append_sheet(wb,edgesSheet,'Edges');
+    XLSX.utils.book_append_sheet(wb,overridesSheet,'LayoutOverrides');
+    XLSX.utils.book_append_sheet(wb,ws2,'說明');
+    XLSX.writeFile(wb,'OrgChart_Template.xlsx');
+    closeModal('excelModal');
+}
+
+// ══ Upload ══
+function handleLogoUpload(){
+    const f=document.getElementById('logoUpload').files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=e=>{ logoBase64=e.target.result; document.getElementById('logoPreview').src=logoBase64; document.getElementById('logoPreview').style.display='inline'; logoImg=new Image(); logoImg.onload=()=>drawCanvasPreview(1); logoImg.src=logoBase64; };
+    r.readAsDataURL(f);
+}
+function buildDraftWorkbookFromTexts(sourceLabel, slideGroups){
+    const nodesRows=[];
+    const slidesRows=[];
+    let nodeCounter=1;
+    slideGroups.forEach((group,slideIndex)=>{
+        const rootId=`D${String(nodeCounter).padStart(3,'0')}`;
+        slidesRows.push({
+            PageGroup:group.pageGroup,
+            SlideTitle:group.title || `${sourceLabel} ${slideIndex+1}`,
+            RenderMode:slideIndex===0 ? 'overview' : 'focus',
+            RootNodeID:rootId,
+            MaxDepth:5,
+            SlideOrder:(slideIndex+1)*10,
+            IncludeCrossLinks:'true',
+            OverflowStrategy:'split-by-child-group'
+        });
+        nodesRows.push({
+            NodeID:rootId,
+            ParentID:'',
+            Dept:group.title || `${sourceLabel} ${slideIndex+1}`,
+            Name:'',
+            Title:t('draftRootTitle'),
+            PageGroup:group.pageGroup,
+            SortOrder:10,
+            RoleType:'normal',
+            LayoutType:'standard',
+            LevelHint:1,
+            Color:'',
+            ShowInOverview:'true',
+            ShowInDetail:'true'
+        });
+        group.texts.slice(0,18).forEach((text,idx)=>{
+            nodeCounter+=1;
+            nodesRows.push({
+                NodeID:`D${String(nodeCounter).padStart(3,'0')}`,
+                ParentID:rootId,
+                Dept:text,
+                Name:'',
+                Title:t('draftImportNodeTitle'),
+                PageGroup:group.pageGroup,
+                SortOrder:(idx+2)*10,
+                RoleType:'normal',
+                LayoutType:'standard',
+                LevelHint:2,
+                Color:'',
+                ShowInOverview:slideIndex===0 ? String(idx<8) : 'true',
+                ShowInDetail:'true'
+            });
+        });
+    });
+    return {
+        version:2,
+        exportedAt:new Date().toISOString(),
+        draft:true,
+        workbook:{
+            nodesRows,
+            edgesRows:[],
+            slidesRows,
+            layoutRows:[]
+        }
+    };
+}
+function extractLikelyPdfTexts(rawText){
+    const texts=[];
+    const regex=/\(([^()]{3,80})\)\s*Tj/g;
+    let match;
+    while((match=regex.exec(rawText))!==null){
+        const text=match[1].replace(/\\[()]/g,'').trim();
+        if(text && /[A-Za-z\u4e00-\u9fff]/.test(text)) texts.push(text);
+    }
+    return [...new Set(texts)];
+}
+async function extractPdfTextsWithOcr(arrayBuffer){
+    const pdfjs = window.pdfjsLib;
+    if(!pdfjs) return [];
+    const pdf=await pdfjs.getDocument({data:arrayBuffer}).promise;
+    const collected=[];
+    for(let pageNum=1; pageNum<=Math.min(pdf.numPages,4); pageNum++){
+        const page=await pdf.getPage(pageNum);
+        const textContent=await page.getTextContent();
+        const texts=textContent.items.map(item=>String(item.str||'').trim()).filter(Boolean);
+        if(texts.length){
+            collected.push(...texts);
+            continue;
+        }
+        if(window.Tesseract){
+            const viewport=page.getViewport({scale:1.8});
+            const canvas=document.createElement('canvas');
+            canvas.width=viewport.width;
+            canvas.height=viewport.height;
+            const ctx=canvas.getContext('2d');
+            await page.render({canvasContext:ctx,viewport}).promise;
+            const result=await window.Tesseract.recognize(canvas,'eng+chi_tra');
+            const ocrTexts=(result.data.text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+            collected.push(...ocrTexts);
+        }
+    }
+    return [...new Set(collected.filter(text=>/[A-Za-z\u4e00-\u9fff]/.test(text)))];
+}
+async function handlePptUpload(){
+    const f=document.getElementById('pptUpload').files[0]; if(!f) return;
+    const arrayBuffer=await f.arrayBuffer();
+    const zip=await JSZip.loadAsync(arrayBuffer);
+    let payload=null;
+    const slideNames=Object.keys(zip.files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name));
+    const draftSlides=[];
+    for(const name of slideNames){
+        const text=await zip.files[name].async('string');
+        payload=extractMetadataPayload(text);
+        if(payload) break;
+        const texts=[...text.matchAll(/<a:t>([^<]+)<\/a:t>/g)].map(m=>m[1].trim()).filter(Boolean);
+        if(texts.length) draftSlides.push({pageGroup:`PPT_${draftSlides.length+1}`,title:texts[0],texts});
+    }
+    if(payload && loadSerializedPayload(payload)) return;
+    if(draftSlides.length){
+        loadSerializedPayload(buildDraftWorkbookFromTexts(t('pptDraftSource'),draftSlides));
+        alert(t('warnDraftImport'));
+        return;
+    }
+    alert(t('warnPptDraft'));
+}
+async function handlePdfUpload(){
+    const f=document.getElementById('pdfUpload').files[0]; if(!f) return;
+    const arrayBuffer=await f.arrayBuffer();
+    const text=new TextDecoder('latin1').decode(arrayBuffer);
+    const payload=extractMetadataPayload(text);
+    if(payload && loadSerializedPayload(payload)) return;
+    let texts=extractLikelyPdfTexts(text);
+    if(!texts.length){
+        try {
+            texts=await extractPdfTextsWithOcr(arrayBuffer);
+        } catch {
+            texts=[];
+        }
+    }
+    if(texts.length){
+        loadSerializedPayload(buildDraftWorkbookFromTexts(t('pdfDraftSource'),[{pageGroup:'PDF_1',title:texts[0],texts}]));
+        alert(t('warnDraftImport'));
+        return;
+    }
+    alert(t('warnPdfDraft'));
+}
+
+function handleExcelUpload(){
+    const f=document.getElementById('excelUpload').files[0]; if(!f) return;
+    if(f.size>5*1024*1024){ alert(uiLang==='tw'?'⚠️ 檔案過大，請使用 5MB 以內的 Excel':'⚠️ File too large! Max 5MB.'); return; }
+    const r=new FileReader();
+    r.onload=e=>{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        const hasNodes=findSheetName(wb.SheetNames,'Nodes');
+        const hasSlides=findSheetName(wb.SheetNames,'Slides');
+        if(hasNodes && hasSlides){
+            workbookState=parseWorkbookV2(wb);
+            pathComposerState=[];
+            pathComposerBatchText='';
+            relationBatchText='';
+            relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+            closePreviewContextMenu();
+            workbookState.selectedEditorSheet='Nodes';
+            ensureSelectedNodeForCurrentSlide();
+            refreshSlideGroupSelect();
+            setTextareaForWorkbook(workbookState);
+            collapsed.clear();
+            clearSearch();
+            const b=document.getElementById('collapseBody'),a=document.getElementById('collapseArrow');
+            if(!b.classList.contains('open')){ b.classList.add('open'); a.classList.add('open'); }
+            applyThemeAndPreview();
+            return;
+        }
+        clearWorkbookState();
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        let out='';
+        rows.forEach(row=>{ 
+            const lv=row['Level']||row['層級']||'';
+            const dp=row['Dept']||row['部門']||'';
+            const nm=row['Name']||row['姓名']||'';
+            const ti=row['Title']||row['職稱']||'';
+            let colorStr = row['Color']||row['顏色']||row['色碼'];
+            let color = colorStr ? colorStr.toString().replace('#','') : '';
+            if(color && /^\d+$/.test(color)) color=parseInt(color).toString(16).padStart(6,'0');
+            if(lv!=='') out+=`${lv}, ${dp}, ${nm}, ${ti}${color ? ', '+color : ''}\n`; 
+        });
+        if(!out.trim()){ alert(uiLang==='tw'?'⚠️ 找不到對應欄位！':'⚠️ Columns not matched!'); return; }
+        collapsed.clear(); document.getElementById('dataInput').value=out.trim();
+        clearSearch();
+        const b=document.getElementById('collapseBody'),a=document.getElementById('collapseArrow');
+        if(!b.classList.contains('open')){ b.classList.add('open'); a.classList.add('open'); }
+        applyThemeAndPreview();
+    };
+    r.readAsArrayBuffer(f);
+}
+
+// ══ Sample & Init ══
+// 🌟 根據內容語言(docLang)載入範本
+function loadSample(){
+    clearWorkbookState();
+    collapsed.clear(); document.getElementById('dataInput').value = docLang === 'tw' ? sampleTw : sampleEn;
+    clearSearch();
+    applyThemeAndPreview();
+}
+
+let debTimer=null;
+document.addEventListener('DOMContentLoaded',()=>{
+    document.getElementById('dataInput').addEventListener('input',()=>{
+        if(workbookState && workbookState.mode==='v2'){
+            clearWorkbookState();
+        }
+        clearTimeout(debTimer);
+        debTimer=setTimeout(()=>{ drawCanvasPreview(1); refreshDeptSelect(); },500);
+    });
+    window.addEventListener('resize',()=>{ clearTimeout(debTimer); debTimer=setTimeout(()=>drawCanvasPreview(1),300); });
+    const w=document.getElementById('previewWrapper');
+    w.addEventListener('wheel',e=>{ e.preventDefault(); const r=w.getBoundingClientRect(); zoom(e.deltaY<0?0.1:-0.1,e.clientX-r.left,e.clientY-r.top); },{passive:false});
+    w.addEventListener('contextmenu',e=>{
+        if(e.target.closest('#previewNodeToolbar') || e.target.closest('#previewContextMenu')) return;
+        const hit=workbookState && workbookState.mode==='v2' ? findHitNode(e.clientX,e.clientY) : null;
+        if(!hit){
+            closePreviewContextMenu();
+            return;
+        }
+        e.preventDefault();
+        openPreviewContextMenu(hit.node.id,e.clientX,e.clientY);
+    });
+    w.addEventListener('mousedown',e=>{
+        if(e.button!==0) return;
+        if(e.target.closest('#previewNodeToolbar') || e.target.closest('#previewContextMenu')) return;
+        closePreviewContextMenu();
+        const hit=layoutEditMode && workbookState && workbookState.mode==='v2' ? findHitNode(e.clientX,e.clientY) : null;
+        if(hit){
+            draggingNode=true;
+            draggedNodeId=hit.node.id;
+            selectedNodeId=hit.node.id;
+            draggedNodeStartOverride=getNodeOverride(workbookState.selectedPageGroup,draggedNodeId) || {offsetX:0,offsetY:0};
+            dragSX=e.clientX; dragSY=e.clientY;
+            drawCanvasPreview(1);
+            return;
+        }
+        isDragging=true; draggedDistance=0; w.classList.add('grabbing'); dragSX=e.clientX; dragSY=e.clientY; dragOX=panX; dragOY=panY;
+    });
+    document.addEventListener('mousedown',e=>{
+        const menu=document.getElementById('previewContextMenu');
+        if(previewContextMenuState.visible && menu && !menu.contains(e.target) && !w.contains(e.target)){
+            closePreviewContextMenu();
+        }
+    });
+    document.addEventListener('mousemove',e=>{
+        if(draggingNode && workbookState && workbookState.mode==='v2'){
+            const deltaX=(e.clientX-dragSX)/zoomScale/PPI;
+            const deltaY=(e.clientY-dragSY)/zoomScale/PPI;
+            syncLayoutOverrideRow(workbookState.selectedPageGroup,draggedNodeId,(draggedNodeStartOverride.offsetX||0)+deltaX,(draggedNodeStartOverride.offsetY||0)+deltaY);
+            drawCanvasPreview(1);
+            return;
+        }
+        if(!isDragging) return;
+        draggedDistance=Math.max(draggedDistance,Math.abs(e.clientX-dragSX),Math.abs(e.clientY-dragSY));
+        panX=dragOX+(e.clientX-dragSX); panY=dragOY+(e.clientY-dragSY); applyTransform();
+    });
+    document.addEventListener('mouseup',()=>{
+        draggingNode=false;
+        draggedNodeId=null;
+        draggedNodeStartOverride=null;
+        isDragging=false;
+        document.getElementById('previewWrapper').classList.remove('grabbing');
+    });
+    document.addEventListener('keydown',e=>{
+        if(e.key==='Escape') closePreviewContextMenu();
+    });
+    w.addEventListener('click',handleCanvasClick);
+});
+
+window.addEventListener('load',()=>{
+    initializeUILang();
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if (translations[uiLang][k] !== undefined) {
+            el.innerHTML = translations[uiLang][k];
+        }
+    });
+    updateSwatches();
+    updateDynamicLabels(buildOrgModel());
+    refreshSlideGroupSelect();
+    drawCanvasPreview(1);
+    refreshDeptSelect();
+    panX=12; panY=12;
+    applyTransform();
+    setTimeout(zoomFit, 200);
+});
+</script>
+</body>
+</html>
