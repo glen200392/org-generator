@@ -1,0 +1,15 @@
+{
+  "name": "@orgchart/legacy",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Original single-file org chart generator (preserved during migration)",
+  "scripts": {
+    "serve": "http-server . -p 4173",
+    "test:smoke": "playwright test",
+    "test": "npm run test:smoke"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2",
+    "http-server": "^14.1.1"
+  }
+}

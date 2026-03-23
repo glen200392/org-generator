@@ -14,7 +14,15 @@ node_modules/
 # Build artifacts
 *.tmp
 *.bak
+dist/
+.turbo/
 
 # Test artifacts
 test-results/
 playwright-report/
+
+# pnpm
+pnpm-debug.log*
+
+# Vite
+*.local

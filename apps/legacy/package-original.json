@@ -1,0 +1,17 @@
+{
+  "name": "org-generator",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Standalone web tool for modeling and exporting organization charts.",
+  "scripts": {
+    "serve": "http-server . -p 4173",
+    "lint": "htmlhint index.html",
+    "test:smoke": "playwright test",
+    "test": "npm run lint && npm run test:smoke"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2",
+    "htmlhint": "^1.6.3",
+    "http-server": "^14.1.1"
+  }
+}
