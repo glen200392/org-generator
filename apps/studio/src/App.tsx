@@ -243,14 +243,10 @@ function StudioCanvas() {
     }
 
     if (target.type === "reparent") {
-      const dragData = (nodes as OrgFlowNode[]).find((n) => n.id === dragId)?.data as Record<string, unknown> | undefined;
-      const targetData = (nodes as OrgFlowNode[]).find((n) => n.id === target.nodeId)?.data as Record<string, unknown> | undefined;
-      const msg = lang === "tw"
-        ? `確定將「${dragData?.dept ?? dragId}」移到「${targetData?.dept ?? target.nodeId}」下方？`
-        : `Move "${dragData?.dept ?? dragId}" under "${targetData?.dept ?? target.nodeId}"?`;
-      setConfirmDialog({ message: msg, onConfirm: () => reparentNode(dragId, target.nodeId) });
+      // Direct reparent — no confirmation needed (Ctrl+Z to undo)
+      reparentNode(dragId, target.nodeId);
     }
-  }, [dropTarget, nodes, lang, swapSiblingOrder, reparentNode]);
+  }, [dropTarget, swapSiblingOrder, reparentNode]);
 
   // ── Click handlers ──
 

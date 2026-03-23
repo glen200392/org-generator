@@ -1,0 +1,113 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build core
+        run: pnpm --filter @orgchart/core build
+
+      - name: Build Studio
+        run: pnpm --filter @orgchart/studio build -- --base=/org-generator/studio/
+
+      - name: Build SAP Edition
+        run: pnpm --filter @orgchart/sap-edition build -- --base=/org-generator/sap/
+
+      - name: Assemble Pages output
+        run: |
+          mkdir -p _site/studio _site/sap
+
+          # Legacy app at root
+          cp index.html _site/
+          cp -r docs _site/docs 2>/dev/null || true
+
+          # Studio
+          cp -r apps/studio/dist/* _site/studio/
+
+          # SAP Edition
+          cp -r apps/sap-edition/dist/* _site/sap/
+
+          # Index page with links to all versions
+          cat > _site/index.html << 'HEREDOC'
+          <!DOCTYPE html>
+          <html lang="zh-TW">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>OrgChart — 組織圖工具</title>
+            <style>
+              body { font-family: "Microsoft JhengHei", sans-serif; background: #0A192F; color: #E2E8F0; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+              .container { text-align: center; max-width: 600px; }
+              h1 { color: #64FFDA; font-size: 28px; }
+              .cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; margin-top: 30px; }
+              a.card { display: block; padding: 24px 32px; background: #1E293B; border: 2px solid #334155; border-radius: 12px; text-decoration: none; color: #E2E8F0; min-width: 160px; transition: all 0.2s; }
+              a.card:hover { border-color: #64FFDA; transform: translateY(-2px); }
+              .card h2 { margin: 0 0 8px; font-size: 18px; color: #64FFDA; }
+              .card p { margin: 0; font-size: 13px; color: #94A3B8; }
+              .version { margin-top: 40px; font-size: 11px; color: #475569; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>OrgChart 企業組織圖工具</h1>
+              <p>Tymphany Group — Dual-App Architecture</p>
+              <div class="cards">
+                <a class="card" href="./studio/">
+                  <h2>🎯 Studio</h2>
+                  <p>CEO / HR 主管<br>互動拖曳版</p>
+                </a>
+                <a class="card" href="./sap/">
+                  <h2>📊 SAP Edition</h2>
+                  <p>HRBP / HRIS<br>SuccessFactors 整合版</p>
+                </a>
+              </div>
+              <div class="version">v2.0.0 — React Flow + ELK.js + Canvas</div>
+            </div>
+          </body>
+          </html>
+          HEREDOC
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
