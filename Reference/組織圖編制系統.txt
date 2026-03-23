@@ -1,0 +1,525 @@
+# 組織圖編制系統｜完整功能、技術棧與架構參考文件
+
+> 適用情境：了解此工具的設計思路與技術實作，作為開發自有工具的參考基礎。
+> 爬取來源：https://org-chart-eta.vercel.app/app
+
+---
+
+## 工具定位與使用限制
+
+### 這是什麼工具
+
+一套**純前端、手動輸入式**的組織圖視覺化編輯工具，適合小型團隊或個人用來繪製、整理、匯出組織架構圖。
+
+### 明確的能力邊界
+
+| 能力 | 是否支援 | 說明 |
+|---|---|---|
+| 手動輸入組織資料 | ✅ | 所有欄位皆可直接在介面上填寫 |
+| 視覺化拖曳編輯 | ✅ | 樹狀清單拖曳排序、右鍵快速操作 |
+| 自動排版 | ✅ | 一鍵重新計算所有節點座標 |
+| 雙語顯示（中／英） | ✅ | 每個節點均有中英文欄位 |
+| 多格式匯出 | ✅ | PNG、PDF、CSV、JSON |
+| 版本快照備份 | ✅ | 支援多個命名快照，可還原 |
+| **串接外部系統（HRIS/ERP/AD）** | ❌ | 無 API 串接能力 |
+| **多人即時協作** | ❌ | 資料存 localStorage，不共享 |
+| **資料驗證／審核流程** | ❌ | 無欄位驗證、無審核工作流 |
+| **分享連結** | ❌ | 只能匯出靜態檔案分享 |
+| **後端資料庫** | ❌ | 無後端，全靠瀏覽器本地儲存 |
+
+---
+
+## 技術棧
+
+### 前端框架
+
+**純原生 JavaScript（Vanilla JS）**，無任何前端框架。
+```
+HTML5 + CSS3 + JavaScript (ES6+)
+全部寫在單一 .html 檔案的 inline <script> 與 <style> 中
+```
+
+### 圖形渲染
+```
+節點：CSS position: absolute（div 元素，絕對座標定位）
+連線：SVG <line> 元素（直角折線，非曲線 path）
+縮放：CSS transform: scale()
+```
+
+### 字型
+```
+Noto Sans TC（繁體中文）
+DM Mono（等寬字型，用於代碼欄位）
+來源：Google Fonts CDN
+```
+
+### 資料持久化
+```
+瀏覽器 localStorage
+  orgchart_nodes    ← 完整組織圖資料（JSON 字串）
+  orgchart_lang     ← 使用者語言偏好
+  orgchart_snapshots ← 快照備份陣列（JSON 字串）
+```
+
+### 匯出技術
+```
+PNG：canvas-inner DOM → 截圖 → <a download>
+PDF：window.print() + CSS @media print 控制版面
+CSV：JavaScript 字串組合 → <a download>
+JSON：JSON.stringify() → <a download>
+```
+
+### 部署
+```
+Vercel（靜態檔案托管，零後端）
+```
+
+---
+
+## 核心資料結構
+
+### 全局 Runtime 狀態
+```js
+historyStack[]   // 每次操作後推入序列化 JSON 字串（完整快照）
+historyIndex     // 指向目前狀態的整數 pointer
+```
+
+### localStorage 持久化 Schema
+```json
+{
+  "nodes": {
+    "n1": { /* 節點物件 */ },
+    "n3": { /* 節點物件 */ }
+  },
+  "rootIds": ["n1"],
+  "uid": 18,
+  "collapsed": { "n3": true },
+  "layoutCfg": {
+    "logo": "",
+    "title": "Group Org Chart",
+    "version": "v1.0",
+    "date": "2026-03",
+    "sApprove": "Approved",
+    "sReview": "Reviewed",
+    "sMake": "Prepared"
+  }
+}
+```
+
+### 節點（Node）完整 Schema
+```js
+{
+  // ── 業務資料欄位 ──────────────────────────
+  id:           "n3",              // 唯一 ID（自動遞增）
+  name:         "財務部",           // 部門名稱（中文）
+  nameEn:       "Finance Dept",    // 部門名稱（英文）
+  person:       "陳美華 Chen",      // 負責人（中文）
+  personEn:     "May Chen",        // 負責人（英文）
+  position:     "財務長",           // 職位（中文）
+  positionEn:   "CFO",             // 職位（英文）
+  rr:           "• 負責財務規劃…",  // 職責說明（中文 R&R）
+  rrEn:         "",                // 職責說明（英文）
+  code:         "FIN-001",         // 單位代碼
+  style:        "normal",          // 框線樣式："normal" | "bold" | "dashed"
+  color:        "#e3f2fd",         // 背景顏色（hex）
+  isAssistant:  false,             // 幕僚單位（顯示在父節點側邊）
+  isSubsidiary: false,             // 獨立子公司（下一層次對齊）
+  layout:       "horizontal",     // 子節點排版："horizontal" | "vertical"
+  children:     ["n4", "n5"],      // 子節點 ID 陣列（決定顯示順序）
+  parent:       "n1",              // 父節點 ID（null = 根節點）
+  x:            125,               // 計算後 X 座標（px）
+  y:            286,               // 計算後 Y 座標（px）
+
+  // ── Layout 計算快取欄位（_ 前綴） ─────────
+  _asts:   [...],  // 幕僚子節點物件陣列
+  _norms:  [...],  // 一般子節點物件陣列
+  _nw:     130,    // 節點本身寬度（px）
+  _w:      300,    // 整個子樹總寬度（px）
+  _h:      128,    // 整個子樹總高度（px）
+  _rootX:  150,    // 子樹根部 X 中心點（px）
+}
+```
+
+---
+
+## 介面架構
+
+### DOM 層次結構
+```
+<body>
+  ├── .topbar（頂部工具列）
+  │     ├── .logo
+  │     ├── 顯示人員 checkbox   [id: toggle-names]
+  │     ├── 顯示代碼 checkbox   [id: toggle-codes]
+  │     ├── 自動排版按鈕         onclick="autoLayout()"
+  │     ├── 新根節點按鈕         onclick="addRootNode()"
+  │     ├── Undo 按鈕           [id: btn-undo]     onclick="undo()"
+  │     ├── Redo 按鈕           [id: btn-redo]     onclick="redo()"
+  │     ├── 快照 select         [id: snapshot-select]
+  │     ├── 📸 備份按鈕          onclick="takeSnapshot()"
+  │     ├── 🗂 備份/還原下拉     [id: backup-dropdown-wrap]
+  │     │     ├── 匯出 JSON     [id: btn-export-json]
+  │     │     └── 匯入 JSON     [id: btn-import-json]（file input）
+  │     ├── 💾 暫存草稿          [id: btn-save-draft]  onclick="saveDraft()"
+  │     ├── ⬇ 匯出下拉          [id: export-dropdown-wrap]
+  │     │     ├── 🖼 匯出 PNG   onclick="exportPNG()"
+  │     │     ├── 📄 匯出 PDF   onclick="exportPDF()"
+  │     │     └── 📊 匯出 CSV   onclick="exportCSV()"
+  │     └── 語言切換             onclick="switchLang('zh-TW'|'en')"
+  │
+  ├── .main
+  │     ├── #sidebar（可展開／收合，預設收合）
+  │     │     ├── .tabs
+  │     │     │     ├── #tab-btn-props  → #tab-props（節點屬性）
+  │     │     │     ├── #tab-btn-tree   → #tab-tree（組織架構樹）
+  │     │     │     └── #tab-btn-layout → #tab-layout（版面設定）
+  │     │     │
+  │     │     ├── #tab-props（節點屬性面板）
+  │     │     │     ├── #no-sel（未選取節點時的提示）
+  │     │     │     └── #prop-fields（選取節點後顯示）
+  │     │     │           ├── #prop-name        中文名稱
+  │     │     │           ├── #prop-name-en     英文名稱
+  │     │     │           ├── #prop-parent      父節點（select）
+  │     │     │           ├── #prop-person      負責人（中）
+  │     │     │           ├── #prop-person-en   負責人（英）
+  │     │     │           ├── #prop-position    職位（中）
+  │     │     │           ├── #prop-position-en 職位（英）
+  │     │     │           ├── #prop-code        單位代碼
+  │     │     │           ├── #prop-rr          職責說明（中）textarea
+  │     │     │           ├── #prop-rr-en       職責說明（英）textarea
+  │     │     │           ├── #prop-style       框線樣式 select
+  │     │     │           ├── #prop-layout      子節點排版 select
+  │     │     │           ├── #prop-assistant   幕僚單位 checkbox
+  │     │     │           ├── #prop-subsidiary  獨立子公司 checkbox
+  │     │     │           └── #color-row        背景顏色點選
+  │     │     │
+  │     │     ├── #tab-tree（組織架構樹面板）
+  │     │     │     ├── .tree-toolbar
+  │     │     │     │     ├── #tree-search（搜尋框）
+  │     │     │     │     ├── 全部展開 onclick="expandAll()"
+  │     │     │     │     └── 全部收合 onclick="collapseAll()"
+  │     │     │     └── #tree-body（拖曳排序樹狀列表）
+  │     │     │           └── .tree-row × N（每個節點一行）
+  │     │     │                 ├── .tree-toggle（▾ 展開箭頭）
+  │     │     │                 ├── .drag-handle（⠿ 拖曳把手）
+  │     │     │                 ├── .tree-text（名稱 + 負責人）
+  │     │     │                 ├── .tree-badge（單位代碼）
+  │     │     │                 └── .tree-acts（＋ 🔀 ✕ 操作鈕）
+  │     │     │
+  │     │     └── #tab-layout（版面設定面板）
+  │     │           ├── #cfg-logo     Logo URL
+  │     │           ├── #cfg-title    圖表標題
+  │     │           ├── #cfg-version  版本號
+  │     │           ├── #cfg-date     日期
+  │     │           ├── #cfg-sign-approve-title  核准欄標題
+  │     │           ├── #cfg-sign-review-title   審查欄標題
+  │     │           └── #cfg-sign-make-title     製作欄標題
+  │     │
+  │     ├── #sidebar-toggle（展開側欄按鈕）
+  │     │
+  │     └── #canvas-wrap（畫布捲動容器，overflow: auto）
+  │           ├── #canvas-inner（縮放容器，CSS transform: scale）
+  │           │     ├── #canvas-header
+  │           │     │     ├── #render-logo
+  │           │     │     ├── #render-title
+  │           │     │     ├── #render-version
+  │           │     │     └── #render-date
+  │           │     ├── #svg-lines（SVG 連線層，position: absolute）
+  │           │     ├── #nd-n1 ~ #nd-nN（節點 div，position: absolute）
+  │           │     │     ├── .nt（部門名稱）
+  │           │     │     ├── .npos（職位）
+  │           │     │     ├── .np（負責人）
+  │           │     │     ├── .nc（單位代碼）
+  │           │     │     └── .nr（R 職責說明觸發鈕）
+  │           │     └── #canvas-footer（簽核欄：核准／審查／製作）
+  │           └── .zoom-controls
+  │                 ├── − 縮小  onclick="zoom(-0.1)"
+  │                 ├── #zoom-lbl（顯示百分比）
+  │                 ├── ＋ 放大  onclick="zoom(0.1)"
+  │                 └── ⊡ 適配  onclick="fitView()"
+  │
+  ├── #ctx-menu（右鍵選單，position: fixed）
+  │     ├── ＋ 新增子節點   onclick="ctxAddChild()"
+  │     ├── → 新增同層節點  onclick="ctxAddSibling()"
+  │     ├── ─ 分隔線
+  │     ├── 🔀 移動到其他節點下  onclick="ctxReparent()"
+  │     ├── ↑ 向前移動     onclick="ctxMoveOrder(-1)"
+  │     ├── ↓ 向後移動     onclick="ctxMoveOrder(1)"
+  │     ├── ─ 分隔線
+  │     └── ✕ 刪除節點     onclick="deleteSelected()"
+  │
+  ├── #rr-popover（職責說明浮動視窗）
+  │     ├── #rr-popover-name（節點名稱）
+  │     └── #rr-popover-body（R&R 內文）
+  │
+  ├── #modal-add（新增節點 Modal）
+  │     ├── #m-name      名稱（必填）
+  │     ├── #m-person    負責人
+  │     ├── #m-position  職位
+  │     ├── #m-code      單位代碼
+  │     ├── 取消  onclick="closeModal('modal-add')"
+  │     └── 確定  onclick="confirmAdd()"
+  │
+  └── #modal-reparent（移動節點 Modal）
+        ├── #reparent-desc（說明文字）
+        ├── #reparent-list（可選目標節點列表）
+        └── 取消
+```
+
+---
+
+## 核心操作邏輯
+
+### 5.1 歷史記錄（Undo / Redo）
+
+**策略：完整狀態快照堆疊（Full State Snapshot Stack）**
+```js
+// 每次操作完成後呼叫
+pushHistory()
+  → JSON.stringify(當前全部 nodes + rootIds + collapsed + layoutCfg)
+  → historyStack.push(jsonString)
+  → 截斷 historyIndex 之後的分支
+
+undo()  →  historyIndex--  →  restoreState(historyStack[historyIndex])
+redo()  →  historyIndex++  →  restoreState(historyStack[historyIndex])
+```
+```js
+// 實際函數原始碼
+function undo() {
+  if (historyIndex > 0) {
+    historyIndex--;
+    restoreState(historyStack[historyIndex]);
+  }
+}
+
+function redo() {
+  if (historyIndex < historyStack.length - 1) {
+    historyIndex++;
+    restoreState(historyStack[historyIndex]);
+  }
+}
+```
+
+### 5.2 節點新增完整流程
+```
+使用者觸發（三種入口）
+  A. 工具列「＋ 新根節點」   → addRootNode()   → openModal('root', null)
+  B. 右鍵「＋ 新增子節點」   → ctxAddChild()   → openModal('child', ctxTarget)
+| `.modal-overlay` | Modal 背景遮罩（全螢幕半透明） |
+| `.modal-overlay.show` | Modal 顯示狀態 |
+| `.modal` | Modal 內容框 |
+| `.modal.wide` | 寬版 Modal（如 reparent 列表） |
+| `.rr-popover` | 職責說明浮動視窗 |
+| `.rr-popover.show` | 顯示狀態 |
+| `.zoom-controls` | 縮放控制列（右下角固定） |
+| `.info-bar` | 底部提示列 |
+| `.info-bar.show` | 顯示狀態 |
+| `body.readonly-mode` | 唯讀模式（CSS 一次性禁用所有編輯元件） |
+
+---
+
+## 節點視覺屬性對照
+
+### 框線樣式（style 欄位）
+
+| 值 | 外觀 | 適用情境 |
+|---|---|---|
+| `"normal"` | 一般細框線 | 一般部門／單位 |
+| `"bold"` | 粗框線（.style-bold） | 重要節點（公司、事業群） |
+| `"dashed"` | 虛線框（.dashed） | 關聯單位、外部合作單位 |
+
+### 子節點排版（layout 欄位）
+
+| 值 | 效果 | 適用情境 |
+|---|---|---|
+| `"horizontal"` | 子節點水平展開（左右並排） | 部門層級（預設） |
+| `"vertical"` | 子節點垂直堆疊（上下排列） | 人員層級、深層級節點 |
+
+### 特殊節點旗標
+
+| 欄位 | 效果 |
+|---|---|
+| `isAssistant: true` | 幕僚單位：顯示在父節點右側，不參與主幹寬度計算，以水平線連接 |
+| `isSubsidiary: true` | 獨立子公司：子層次對齊方式不同，以虛線連接表示獨立性 |
+
+### 預設背景顏色選板（8 色）
+```
+白色    #ffffff  （預設）
+淡綠    #e8f8f1
+深綠    #d0f0e0
+淡黃    #fff8e1
+淡藍    #e3f2fd
+淡粉    #fce4ec
+淡紫    #f3e5f5
+淡靛    #e8eaf6
+```
+
+---
+
+## 事件綁定完整清單
+
+### oninput 事件（即時觸發）
+
+| 元素 ID | 綁定函數 | 說明 |
+|---|---|---|
+| `prop-name` | `updateSelected()` | 部門名稱即時更新 |
+| `prop-name-en` | `updateSelected()` | 英文名稱即時更新 |
+| `prop-person` | `updateSelected()` | 負責人即時更新 |
+| `prop-person-en` | `updateSelected()` | 英文負責人即時更新 |
+| `prop-position` | `updateSelected()` | 職位即時更新 |
+| `prop-position-en` | `updateSelected()` | 英文職位即時更新 |
+| `prop-code` | `updateSelected()` | 代碼即時更新 |
+| `prop-rr` | `updateSelected()` | 職責說明即時更新 |
+| `prop-rr-en` | `updateSelected()` | 英文職責說明即時更新 |
+| `tree-search` | `renderTree()` | 搜尋即時過濾 |
+| `cfg-logo` | `updateLayoutVars()` | Logo URL 即時更新 |
+| `cfg-title` | `updateLayoutVars()` | 標題即時更新 |
+| `cfg-version` | `updateLayoutVars()` | 版本即時更新 |
+| `cfg-date` | `updateLayoutVars()` | 日期即時更新 |
+| `cfg-sign-approve-title` | `updateLayoutVars()` | 核准欄即時更新 |
+| `cfg-sign-review-title` | `updateLayoutVars()` | 審查欄即時更新 |
+| `cfg-sign-make-title` | `updateLayoutVars()` | 製作欄即時更新 |
+
+### onchange 事件
+
+| 元素 ID | 綁定函數 | 說明 |
+|---|---|---|
+| `toggle-names` | `autoLayout()` | 顯示／隱藏人員名稱 |
+| `toggle-codes` | `autoLayout()` | 顯示／隱藏單位代碼 |
+| `snapshot-select` | `loadSnapshot(this.value)` | 切換快照 |
+| `import-json-input` | `importJSON(this)` | 匯入 JSON 檔 |
+| `prop-parent` | `updateSelected()` | 更改父節點 |
+| `prop-style` | `updateSelected()` | 更改框線樣式 |
+| `prop-layout` | `updateSelected()` | 更改子節點排版 |
+| `prop-assistant` | `updateSelected()` | 切換幕僚單位 |
+| `prop-subsidiary` | `updateSelected()` | 切換獨立子公司 |
+
+### onclick 事件（工具列）
+
+| 元素 | 綁定函數 |
+|---|---|
+| 自動排版按鈕 | `autoLayout()` |
+| 新根節點按鈕 | `addRootNode()` |
+| Undo 按鈕 | `undo()` |
+| Redo 按鈕 | `redo()` |
+| 備份按鈕 | `takeSnapshot()` |
+| 還原到此版本 | `restoreToSnapshot()` |
+| 備份/還原下拉 | `toggleBackupMenu()` |
+| 匯出 JSON | `exportJSON(); closeBackupMenu()` |
+| 暫存草稿 | `saveDraft()` |
+| 匯出 PNG | `exportPNG(); closeExportMenu()` |
+| 匯出 PDF | `exportPDF(); closeExportMenu()` |
+| 匯出 CSV | `exportCSV(); closeExportMenu()` |
+| 語言切換（繁中） | `switchLang('zh-TW')` |
+| 語言切換（EN） | `switchLang('en')` |
+
+---
+
+## i18n 完整 Key 清單
+```
+pageTitle         autoLayout        addRoot
+snapshotLabel     snapshotBackup    snapshotRestore
+backupMenu        exportJSON        importJSONLabel
+saveDraft         exportBtn         exportPNG
+exportPDF         exportCSV
+tabProps          tabTree           tabLayout
+secBasic          labelName         labelNameEn
+labelParent       labelPerson       labelPersonEn
+labelPosition     labelPositionEn   labelCode
+labelRR           labelRREn
+secStyle          labelBorderStyle
+styleNormal       styleBold         styleDashed
+labelChildLayout  layoutHorizontal  layoutVertical
+checkAssistant    checkSubsidiary   labelBgColor
+secStructure      addChild          moveNode         deleteNode
+secLayoutInfo     labelLogo         labelTitle
+labelVersion      labelDate
+secSignature      labelApprove      labelReview      labelMake
+ctxAddChild       ctxAddSibling     ctxReparent
+ctxMoveUp         ctxMoveDown       ctxDelete
+modalAddTitle     labelMName        labelMPerson
+labelMPosition    labelMCode
+cancel            confirmAdd        modalReparentTitle
+toggleNames       toggleCodes
+phSearch          phMName           phMPerson
+phMPosition       phMCode
+expandAllTitle    collapseAllTitle
+```
+
+---
+
+## 與 HR / 管理層需求的落差分析（供開發參考）
+
+如果你要開發一套真正符合企業需求的工具，以下是此工具尚未解決、但你應該納入設計的功能點：
+
+### 對 HR（資料正確性）
+
+| 需求 | 此工具現況 | 建議補強方向 |
+|---|---|---|
+| 串接 HRIS / HR master data | ❌ 無 | 實作 REST API 介接層，定期同步人員異動 |
+| 欄位格式驗證（如代碼規則） | ❌ 無驗證 | 前端 input validation + 正規表達式驗證 |
+| 多人協作與衝突解決 | ❌ 僅單人 localStorage | 後端資料庫 + WebSocket 實時同步 |
+| 版本審核工作流（草稿 → 審核 → 發布） | ❌ 無 | 設計狀態機（draft / pending / published） |
+| 變更記錄／異動歷史追蹤 | ⚠️ 有快照但無 diff | 實作 diff 演算法記錄每次變更的具體內容 |
+| 權限控制（誰能編輯哪個部門） | ❌ 無 | Role-based access control（RBAC） |
+
+### 對高階主管（易讀性 + 快速對齊）
+
+| 需求 | 此工具現況 | 建議補強方向 |
+|---|---|---|
+| 分享連結（不需安裝即可瀏覽） | ❌ 只能匯出靜態檔 | 後端儲存 + 產生唯讀分享 URL |
+| 即時協作討論（留言、標注） | ❌ 無 | 整合留言系統（如 WebSocket 推播） |
+| 行動裝置友好 | ⚠️ 基本 responsive | 針對 touch 事件優化拖曳與縮放 |
+| 比較兩個版本的差異 | ❌ 無 | 視覺化 diff（新增綠色、刪除紅色、移動黃色） |
+| 隱藏特定部門（機密組織） | ❌ 無 | 節點可見性控制（visibility flag） |
+| 列印最佳化（A3/A4 自動分頁） | ⚠️ 有 print 但未分頁 | CSS @page + 分頁算法 |
+
+---
+
+## 開發自有工具的建議架構
+
+如果你要以此工具為原型，開發一套企業級的組織圖系統，以下是推薦的技術選型：
+
+### 前端
+```
+框架：      React 或 Vue 3（組件化管理節點、面板、Modal）
+圖形渲染：  Vanilla SVG 或 React Flow（已處理縮放、拖曳、連線）
+狀態管理：  Zustand 或 Pinia（扁平化 nodes 物件 + 歷史堆疊）
+拖曳：      @dnd-kit/core（現代化拖曳，支援觸控）
+匯出 PNG：  html2canvas 或 dom-to-image
+匯出 PDF：  jsPDF 或 @react-pdf/renderer
+```
+
+### 後端
+```
+API：       Node.js (Express / Fastify) 或 Next.js API Routes
+資料庫：    PostgreSQL（節點資料）+ Redis（快照快取）
+認證：      NextAuth.js 或 Auth0（RBAC）
+即時同步：  Socket.io 或 Supabase Realtime
+```
+
+### 資料模型升級
+```
+保留此工具的 Node Schema 核心欄位，增加：
+  createdAt / updatedAt   異動追蹤
+  createdBy / updatedBy   操作人員
+  status                  草稿 / 審核中 / 已發布
+  version                 版本號
+  orgId                   組織 ID（多租戶）
+  externalId              對應 HRIS 系統的員工 / 部門 ID
+  isVisible               可見性控制
+  metadata                彈性擴充欄位
+```
+
+### 佈局演算法升級建議
+```
+保留此工具的 Bottom-up 測量 + Top-down 定位核心邏輯
+若需要更複雜場景（跨層連線、矩陣組織），可整合：
+  Dagre.js   → 有向圖自動佈局
+  ELK.js     → Eclipse Layout Kernel，支援多種佈局算法
+  d3-hierarchy → 標準樹狀佈局（Tidy Tree / Cluster / Radial）
+```
+
+---
+
+*文件整理自 https://org-chart-eta.vercel.app/app 的前端原始碼分析，包含 DOM 結構、全局函數、localStorage Schema、CSS Class 命名規範，可作為開發參考使用。*

@@ -23,6 +23,8 @@ import { PropertyPanel } from "./components/PropertyPanel";
 import { suggestLayout, analyzeTreeDimensions } from "./features/ai-layout";
 import { isVoiceSupported, createVoiceSession, parseVoiceTranscript } from "./features/voice-input";
 import { RulesEditor } from "./components/RulesEditor";
+import { EdgeTypeSelector } from "./components/EdgeTypeSelector";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ScenarioPanel } from "./components/ScenarioPanel";
 import { exportPNG, exportPDF, getFlowViewport } from "./features/export";
 import { exportPPTX } from "./features/export-pptx";
@@ -65,6 +67,7 @@ function StudioCanvas() {
   const [showRulesEditor, setShowRulesEditor] = useState(false);
   const [showScenarioPanel, setShowScenarioPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const reactFlowInstance = useReactFlow();
 
   const { layoutNodes } = useElkLayout({
@@ -153,21 +156,30 @@ function StudioCanvas() {
     const nodeData = node.data as Record<string, unknown>;
     if (target.id === nodeData?.parentId) return;
 
-    if (window.confirm(
-      lang === "tw"
-        ? `確定將「${nodeData?.dept ?? node.id}」移到「${(target.data as Record<string, unknown>)?.dept ?? target.id}」下方？`
-        : `Move "${nodeData?.dept ?? node.id}" under "${(target.data as Record<string, unknown>)?.dept ?? target.id}"?`,
-    )) {
-      reparentNode(node.id, target.id);
-    }
+    const msg = lang === "tw"
+      ? `確定將「${nodeData?.dept ?? node.id}」移到「${(target.data as Record<string, unknown>)?.dept ?? target.id}」下方？`
+      : `Move "${nodeData?.dept ?? node.id}" under "${(target.data as Record<string, unknown>)?.dept ?? target.id}"?`;
+    const capturedNodeId = node.id;
+    const capturedTargetId = target.id;
+    setConfirmDialog({ message: msg, onConfirm: () => reparentNode(capturedNodeId, capturedTargetId) });
   }, [reactFlowInstance, reparentNode, lang]);
 
   // Connect handle → create edge
+  // Connect handle → show edge type selector
+  const [pendingConnection, setPendingConnection] = useState<{ source: string; target: string } | null>(null);
+
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
-    const edgeType: EdgeType = "dotted"; // default, could show picker
-    addEdge(connection.source, connection.target, edgeType);
-  }, [addEdge]);
+    // Store pending connection and show type selector
+    setPendingConnection({ source: connection.source, target: connection.target });
+  }, []);
+
+  const handleEdgeTypeSelect = useCallback((edgeType: EdgeType) => {
+    if (pendingConnection) {
+      addEdge(pendingConnection.source, pendingConnection.target, edgeType);
+    }
+    setPendingConnection(null);
+  }, [pendingConnection, addEdge]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -178,9 +190,11 @@ function StudioCanvas() {
         const sel = useOrgStore.getState().selectedNodeId;
         if (sel && document.activeElement?.tagName !== "INPUT") {
           e.preventDefault();
-          if (window.confirm(lang === "tw" ? "確定刪除此節點？" : "Delete this node?")) {
-            deleteNode(sel);
-          }
+          const capturedId = sel;
+          setConfirmDialog({
+            message: lang === "tw" ? "確定刪除此節點及其子節點？" : "Delete this node and all children?",
+            onConfirm: () => deleteNode(capturedId),
+          });
         }
       }
     }
@@ -372,9 +386,11 @@ function StudioCanvas() {
           onAddChild={() => addChildNode(contextMenu.nodeId)}
           onAddSibling={() => addSiblingNode(contextMenu.nodeId)}
           onDelete={() => {
-            if (window.confirm(lang === "tw" ? "確定刪除此節點及其子節點？" : "Delete this node and all children?")) {
-              deleteNode(contextMenu.nodeId);
-            }
+            const capturedId = contextMenu.nodeId;
+            setConfirmDialog({
+              message: lang === "tw" ? "確定刪除此節點及其子節點？" : "Delete this node and all children?",
+              onConfirm: () => deleteNode(capturedId),
+            });
           }}
           onCreateEdge={() => setEdgeCreationMode(true)}
         />
@@ -391,6 +407,28 @@ function StudioCanvas() {
       {/* Scenario Panel (left side) */}
       {showScenarioPanel && (
         <ScenarioPanel onClose={() => setShowScenarioPanel(false)} />
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          message={confirmDialog.message}
+          onConfirm={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }}
+          onCancel={() => setConfirmDialog(null)}
+          danger
+          confirmLabel={lang === "tw" ? "確定" : "Confirm"}
+          cancelLabel={lang === "tw" ? "取消" : "Cancel"}
+        />
+      )}
+
+      {/* Edge Type Selector (shown after connecting two nodes) */}
+      {pendingConnection && (
+        <EdgeTypeSelector
+          x={window.innerWidth / 2 - 100}
+          y={window.innerHeight / 2 - 80}
+          onSelect={handleEdgeTypeSelect}
+          onCancel={() => setPendingConnection(null)}
+        />
       )}
     </div>
   );

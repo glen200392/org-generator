@@ -1,0 +1,41 @@
+我正在開發一套企業內部的組織圖工具，需要串接不同系統資料（如 ERP、HRIS、AD）並自動化生成可視覺化的互動組織圖。
+
+請參考以下工具的設計邏輯與技術架構來協助我開發：
+
+## 產品功能參考（UX/UI 設計標竿）
+
+1. **ChartHop**（最佳動態數據規劃參考）
+   - 官網：https://www.charthop.com
+   - 重點參考：Data Sync（數據同步）、Scenario Planning（情境模擬）、歷史溯源功能
+
+2. **Pingboard**（最佳互動與視覺對齊參考）
+   - 官網：https://pingboard.com
+   - 重點參考：極細緻的權限控管（隱私遮罩）、快速篩選 Filtering、Directory 名冊視圖
+
+3. **OrgChart Now**（最佳資料校驗與邏輯參考）
+   - 官網：https://www.officeworksoftware.com
+   - 重點參考：Data Integrity 資料完整性檢核機制、異常節點偵測、自動計算 Span of Control
+
+4. **Lucidchart**（最佳畫布操作與拖曳架構參考）
+   - 官網：https://www.lucidchart.com
+   - 重點參考：Auto-layout 自動佈局演算法、Data Linking（資料連結）、多人即時協作
+
+## 底層技術框架參考（開發實作）
+
+1. **GoJS**（Northwoods Software）— 適合企業複雜邏輯
+   - 官網：https://gojs.net
+   - 範例：GoJS OrgChart Editor
+
+2. **React Flow / Svelte Flow**（xyflow）— 適合快速迭代開發
+   - 官網：https://reactflow.dev
+
+3. **yFiles**（yWorks）— 適合高端企業 ERP 整合
+   - 官網：https://www.yworks.com
+
+## 核心需求
+
+- **HR 面**：資料正確性驗證、無主管員工偵測（孤立節點）、權限分層（HR 看薪酬考績、一般員工只看職稱）
+- **高階主管面**：拖曳式組織規劃（Sandbox 沙盒模式）、情境模擬（調整後即時顯示預算變動）、一鍵切換視角（職能視角 / 預算視角）、流暢縮放（如 Google Maps 體驗）
+- **技術面**：支援企業防火牆內地端部署（On-premise）、與 SQL Database / Excel / SAP / Oracle 資料串接、Canvas/SVG 渲染支援縮放與小地圖導航
+
+請根據以上需求與參考工具，協助我設計系統架構 / 功能模組 / 前端元件。
