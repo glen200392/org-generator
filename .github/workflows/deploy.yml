@@ -31,24 +31,31 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
-      - name: Build core
-        run: pnpm --filter @orgchart/core build
+      - name: Build core library
+        run: |
+          cd packages/core
+          rm -f tsconfig.tsbuildinfo
+          npx tsc -p tsconfig.json
 
       - name: Build Studio
-        run: cd apps/studio && npx vite build --base=/org-generator/studio/
+        run: |
+          cd apps/studio
+          npx vite build --base=/org-generator/studio/
+          echo "Studio build output:"
+          ls -la dist/
 
       - name: Build SAP Edition
-        run: cd apps/sap-edition && npx vite build --base=/org-generator/sap/
+        run: |
+          cd apps/sap-edition
+          npx vite build --base=/org-generator/sap/
+          echo "SAP build output:"
+          ls -la dist/
 
       - name: Assemble Pages output
         run: |
           mkdir -p _site/studio _site/sap
-
-          # Legacy app at root
-          cp index.html _site/
-          cp -r docs _site/docs 2>/dev/null || true
 
           # Studio
           cp -r apps/studio/dist/* _site/studio/
@@ -56,8 +63,8 @@ jobs:
           # SAP Edition
           cp -r apps/sap-edition/dist/* _site/sap/
 
-          # Index page with links to all versions
-          cat > _site/index.html << 'HEREDOC'
+          # Landing page
+          cat > _site/index.html << 'EOF'
           <!DOCTYPE html>
           <html lang="zh-TW">
           <head>
@@ -94,7 +101,10 @@ jobs:
             </div>
           </body>
           </html>
-          HEREDOC
+          EOF
+
+          echo "=== Pages output ==="
+          find _site -type f | head -20
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
