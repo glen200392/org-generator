@@ -52,8 +52,9 @@ export default function App() {
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
 
-    // Clone roots for layout (don't mutate state)
-    const cloned = JSON.parse(JSON.stringify(roots));
+    // Clone roots for layout — strip circular parent refs before stringify (fix C7)
+    const replacer = (key: string, val: unknown) => key === "parent" ? undefined : val;
+    const cloned = JSON.parse(JSON.stringify(roots, replacer));
     applyRoleLayoutAdjustments(cloned);
     calculateLayout(cloned, 999);
 

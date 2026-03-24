@@ -225,10 +225,23 @@ function OrgNodeComponent(props: { data: OrgNodeData; id: string }) {
           />
         </div>
 
-        {/* Person + Title */}
+        {/* Person + Title (fix C4: vacant nodes are now editable) */}
         <div style={{ color: subtextColor, fontSize: 11, marginTop: 2 }}>
           {isVacant ? (
-            <span style={{ fontStyle: "italic" }}>{personName}</span>
+            <>
+              <EditableField
+                value={data.name || (lang === "en" ? "Vacant" : "空缺")}
+                onSave={(v) => handleSave("name", v)}
+                style={{ fontStyle: "italic", color: subtextColor }}
+              />
+              {" ("}
+              <EditableField
+                value={title}
+                onSave={(v) => handleSave(lang === "en" ? "titleEn" : "title", v)}
+                style={{ color: subtextColor }}
+              />
+              {")"}
+            </>
           ) : (
             <>
               <EditableField

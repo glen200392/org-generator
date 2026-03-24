@@ -30,9 +30,30 @@ function removeNodeFromParent(node: OrgNode) {
   }
 }
 
+/** JSON replacer that strips circular `parent` refs for safe serialization */
+export const jsonReplacer = (key: string, value: unknown) =>
+  key === "parent" ? undefined : value;
+
+/** Rebuild parent refs after JSON parse (walk tree, set parent on each child) */
+export function rebuildParentRefs(roots: OrgNode[]): void {
+  function walk(node: OrgNode, parent: OrgNode | null) {
+    node.parent = parent;
+    node.children.forEach((c) => walk(c, node));
+  }
+  roots.forEach((r) => walk(r, null));
+}
+
 export function deepCloneTree(roots: OrgNode[]): OrgNode[] {
   function cloneNode(n: OrgNode, parent: OrgNode | null): OrgNode {
     const clone: OrgNode = { ...n, parent, children: [] };
+    // Deep-copy incumbent and metadata (OrgPosition fields) to prevent shared refs (fix C5)
+    const pos = n as unknown as Record<string, unknown>;
+    if (pos.incumbent && typeof pos.incumbent === "object") {
+      (clone as unknown as Record<string, unknown>).incumbent = { ...(pos.incumbent as object) };
+    }
+    if (pos.metadata && typeof pos.metadata === "object") {
+      (clone as unknown as Record<string, unknown>).metadata = { ...(pos.metadata as object) };
+    }
     clone.children = n.children.map((c) => cloneNode(c, clone));
     return clone;
   }
@@ -335,11 +356,20 @@ export const useOrgStore = create<OrgState>((set, get) => ({
 
   updateNodeField: (nodeId, field, value) => {
     if (!EDITABLE_FIELDS.has(field)) return;
+    const INCUMBENT_FIELDS = new Set(["email", "phone", "location", "startDate", "photoUrl", "nameEn"]);
     mutateActiveScenario(set, get, (scenario) => {
       const nodesById = buildNodesById(scenario.roots);
       const node = nodesById.get(nodeId);
       if (!node) return;
-      (node as unknown as Record<string, unknown>)[field] = value;
+      if (INCUMBENT_FIELDS.has(field)) {
+        // Write into incumbent object (fix C2: nested OrgPerson fields)
+        const pos = node as unknown as { incumbent: Record<string, unknown> | null };
+        if (pos.incumbent) {
+          pos.incumbent[field] = value;
+        }
+      } else {
+        (node as unknown as Record<string, unknown>)[field] = value;
+      }
     });
   },
 
@@ -368,7 +398,15 @@ export const useOrgStore = create<OrgState>((set, get) => ({
       // Must share the same parent
       if (nodeA.parentId !== nodeB.parentId) return;
       const parent = nodeA.parent;
-      if (!parent) return; // both are roots — swap root order
+      if (!parent) {
+        // Both are roots — swap in scenario.roots array (fix C3)
+        const idxA = scenario.roots.findIndex((r) => r.id === nodeIdA);
+        const idxB = scenario.roots.findIndex((r) => r.id === nodeIdB);
+        if (idxA >= 0 && idxB >= 0) {
+          [scenario.roots[idxA], scenario.roots[idxB]] = [scenario.roots[idxB], scenario.roots[idxA]];
+        }
+        return;
+      }
       const idxA = parent.children.findIndex((c) => c.id === nodeIdA);
       const idxB = parent.children.findIndex((c) => c.id === nodeIdB);
       if (idxA < 0 || idxB < 0) return;
@@ -393,7 +431,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
 
   pushHistory: () => {
     const { scenarios, activeScenarioId, history, historyIndex } = get();
-    const snapshot = JSON.stringify({ scenarios, activeScenarioId });
+    const snapshot = JSON.stringify({ scenarios, activeScenarioId }, jsonReplacer);
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(snapshot);
     if (newHistory.length > 50) newHistory.shift();
@@ -405,7 +443,8 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     if (historyIndex <= 0) return;
     const newIndex = historyIndex - 1;
     const snapshot = JSON.parse(history[newIndex]);
-    // Whitelist restored keys to prevent overwriting store functions (fix C1)
+    // Rebuild parent refs lost during JSON serialization (fix C1)
+    snapshot.scenarios.forEach((sc: { roots: OrgNode[] }) => rebuildParentRefs(sc.roots));
     set((s) => ({
       ...s,
       scenarios: snapshot.scenarios,
@@ -420,6 +459,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     if (historyIndex >= history.length - 1) return;
     const newIndex = historyIndex + 1;
     const snapshot = JSON.parse(history[newIndex]);
+    snapshot.scenarios.forEach((sc: { roots: OrgNode[] }) => rebuildParentRefs(sc.roots));
     set((s) => ({
       ...s,
       scenarios: snapshot.scenarios,

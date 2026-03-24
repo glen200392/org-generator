@@ -26,20 +26,11 @@ export function cloneTreeWithFilter(
     : true;
   if (!includeSelf) return null;
 
+  // Use spread to preserve OrgPosition-specific fields (fix S5: deptEn, titleEn, code, fte, incumbent, etc.)
   const cloned: OrgNode = {
-    id: node.id,
-    parentId: node.parentId,
+    ...node,
     level: depth,
-    dept: node.dept,
-    name: node.name,
-    title: node.title,
-    bgColor: node.bgColor,
-    roleType: node.roleType,
-    layoutType: node.layoutType,
-    pageGroup: node.pageGroup,
     sortOrder: node.sortOrder || 0,
-    showInOverview: node.showInOverview,
-    showInDetail: node.showInDetail,
     children: [],
     parent,
     searchMatched: false,

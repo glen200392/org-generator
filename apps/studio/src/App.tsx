@@ -49,23 +49,23 @@ function detectDropType(
   const targetData = flowNodes.find((n) => n.id === targetNodeId)?.data as Record<string, unknown> | undefined;
   if (!dragData || !targetData) return null;
 
-  // Build nodesById for cycle detection
-  const nodesById = new Map<string, { id: string; parentId: string; children: { id: string }[] }>();
+  // Cycle detection using store's tree (flow nodes no longer have children after W3 fix)
+  // Build parent→children map from all flow nodes' parentId field
+  const childrenOf = new Map<string, string[]>();
   flowNodes.forEach((n) => {
-    const d = n.data as Record<string, unknown>;
-    nodesById.set(n.id, {
-      id: n.id,
-      parentId: String(d.parentId ?? ""),
-      children: (d.children as { id: string }[] | undefined) ?? [],
-    });
+    const pid = String((n.data as Record<string, unknown>).parentId ?? "");
+    if (pid) {
+      const list = childrenOf.get(pid) ?? [];
+      list.push(n.id);
+      childrenOf.set(pid, list);
+    }
   });
 
-  // Cycle detection: target must not be a descendant of drag
   const descendants = new Set<string>();
   function collectDesc(id: string) {
     descendants.add(id);
-    const node = nodesById.get(id);
-    if (node) node.children.forEach((c) => collectDesc(c.id));
+    const kids = childrenOf.get(id);
+    if (kids) kids.forEach(collectDesc);
   }
   collectDesc(dragNodeId);
   if (descendants.has(targetNodeId)) return "invalid";

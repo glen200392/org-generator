@@ -19,8 +19,10 @@ export function treeToFlowElements(
   function walk(node: OrgNode, depth: number) {
     const ruleAction = rules.length > 0 ? evaluateRules(node, rules) : undefined;
 
+    // Strip children/parent from flow data to prevent bloat and circular refs (fix W3)
+    const { children: _c, parent: _p, ...rest } = node;
     const data: OrgNodeData = {
-      ...node,
+      ...rest,
       ruleAction,
       lang,
     } as OrgNodeData;
