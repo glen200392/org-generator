@@ -375,6 +375,9 @@
                 <button class="zoom-btn" onclick="zoom(0.15)" title="放大">+</button>
                 <button class="zoom-fit-btn" onclick="zoomFit()" data-i18n="btnZoomFit">⊞ 適合</button>
                 <button class="zoom-fit-btn" onclick="zoomReset()">1:1</button>
+                <span style="border-left:1px solid #CBD5E1;margin:0 4px;"></span>
+                <button class="zoom-fit-btn" id="btnUndo" onclick="undoAction()" disabled title="無可復原" style="font-size:14px;">↩</button>
+                <button class="zoom-fit-btn" id="btnRedo" onclick="redoAction()" disabled title="無可重做" style="font-size:14px;">↪</button>
                 <div style="width:1px;height:22px;background:#CBD5E1;"></div>
                 <div class="ppt-mode-row">
                     <span data-i18n="pptModeLabel">PPT分頁：</span>
@@ -397,7 +400,7 @@
             <button class="zoom-fit-btn" onclick="clearSearch()" id="searchClearBtn"></button>
             <span class="search-summary" id="searchSummary"></span>
         </div>
-        <div class="hint-text" id="previewHintText" data-i18n="previewHint">💡 滾輪縮放 · 拖曳平移 · 點擊節點展開/收合</div>
+        <div class="hint-text" id="previewHintText" data-i18n="previewHint">💡 滾輪縮放 · 拖曳平移 · 點擊節點展開/收合 | 版面微調模式：拖曳節點移位 · Shift+拖曳 換父節點 · Ctrl+Z 復原</div>
         <div class="preview-selection-bar" id="previewSelectionBar"></div>
         <div class="preview-wrapper" id="previewWrapper">
             <div class="preview-inner" id="previewInner">
@@ -1032,6 +1035,9 @@ let relationBatchText='';
 let previewContextMenuState={visible:false,nodeId:null,x:0,y:0};
 let relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
 let layoutEditMode=false,draggedNodeId=null,draggedNodeStartOverride=null,draggingNode=false;
+let reparentMode=false,reparentDropTargetId=null;
+let undoStack=[],redoStack=[];
+const MAX_UNDO=50;
 const METADATA_PREFIX='OGMODELV2:';
 const EDITOR_SHEETS=['Nodes','Edges','Slides','LayoutOverrides'];
 const ROLE_TYPES=['normal','assistant','shared-service','vacant','acting'];
@@ -1100,6 +1106,53 @@ function cloneRows(rows){
         }
         return clean;
     });
+}
+// ══ Undo / Redo ══
+function pushUndoSnapshot(){
+    if(!workbookState || workbookState.mode!=='v2') return;
+    undoStack.push({
+        nodesRows:cloneRows(workbookState.nodesRows),
+        edgesRows:cloneRows(workbookState.edgesRows),
+        slidesRows:cloneRows(workbookState.slidesRows),
+        layoutRows:cloneRows(workbookState.layoutRows)
+    });
+    if(undoStack.length>MAX_UNDO) undoStack.shift();
+    redoStack=[];
+    updateUndoRedoButtons();
+}
+function _restoreSnapshot(snap){
+    workbookState.nodesRows=cloneRows(snap.nodesRows);
+    workbookState.edgesRows=cloneRows(snap.edgesRows);
+    workbookState.slidesRows=cloneRows(snap.slidesRows);
+    workbookState.layoutRows=cloneRows(snap.layoutRows);
+    rebuildWorkbookStateFromRows();
+    updateUndoRedoButtons();
+}
+function undoAction(){
+    if(!workbookState || workbookState.mode!=='v2' || !undoStack.length) return;
+    redoStack.push({
+        nodesRows:cloneRows(workbookState.nodesRows),
+        edgesRows:cloneRows(workbookState.edgesRows),
+        slidesRows:cloneRows(workbookState.slidesRows),
+        layoutRows:cloneRows(workbookState.layoutRows)
+    });
+    _restoreSnapshot(undoStack.pop());
+}
+function redoAction(){
+    if(!workbookState || workbookState.mode!=='v2' || !redoStack.length) return;
+    undoStack.push({
+        nodesRows:cloneRows(workbookState.nodesRows),
+        edgesRows:cloneRows(workbookState.edgesRows),
+        slidesRows:cloneRows(workbookState.slidesRows),
+        layoutRows:cloneRows(workbookState.layoutRows)
+    });
+    _restoreSnapshot(redoStack.pop());
+}
+function updateUndoRedoButtons(){
+    const ub=document.getElementById('btnUndo');
+    const rb=document.getElementById('btnRedo');
+    if(ub){ ub.disabled=!undoStack.length; ub.title=undoStack.length ? `復原 (${undoStack.length})` : '無可復原'; }
+    if(rb){ rb.disabled=!redoStack.length; rb.title=redoStack.length ? `重做 (${redoStack.length})` : '無可重做'; }
 }
 function normalizeBool(v, fallback=true){
     if(v === '' || v === null || v === undefined) return fallback;
@@ -1582,6 +1635,7 @@ function upsertPathLevels(levels, pageGroup){
 }
 function applyPathComposer(){
     if(!workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     const pageGroup=workbookState.selectedPageGroup || workbookState.slides[0]?.pageGroup || '';
     if(!pageGroup) return;
     const levels=normalizePathComposerLevels(getPathComposerLevelCount(lastModel || buildOrgModel())).filter(level=>level.dept || level.name || level.title);
@@ -1593,6 +1647,7 @@ function applyPathComposer(){
 }
 function applyBatchPathComposer(){
     if(!workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     const pageGroup=workbookState.selectedPageGroup || workbookState.slides[0]?.pageGroup || '';
     if(!pageGroup) return;
     const rawLines=String(pathComposerBatchText || '').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
@@ -1911,6 +1966,7 @@ function setSelectedNode(nodeId, shouldRedraw=true){
 }
 function updateNodeFieldById(nodeId, field, value){
     if(!workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     const row=getNodeRowById(nodeId);
     if(!row) return;
     row[field]=value;
@@ -1954,6 +2010,7 @@ function getNextSortOrder(parentId){
 }
 function addNodeRelative(kind){
     if(!workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     const selected=getSelectedNode();
     if(kind!=='root' && !selected) return;
     const parentId=kind==='child' ? selected.id : kind==='sibling' ? (selected.parentId || '') : '';
@@ -2007,6 +2064,7 @@ function collectDescendantIds(rootId){
 function deleteSelectedNode(){
     const node=getSelectedNode();
     if(!node || !workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     const removedIds=collectDescendantIds(node.id);
     workbookState.nodesRows=workbookState.nodesRows.filter(row=>!removedIds.has(getNodeIdFromRow(row)));
     workbookState.edgesRows=workbookState.edgesRows.filter(row=>!removedIds.has(String(row.FromNodeID || row.fromNodeId || '').trim())&&!removedIds.has(String(row.ToNodeID || row.toNodeId || '').trim()));
@@ -2029,6 +2087,7 @@ function deleteSelectedNode(){
 function addEdgeFromSelected(){
     const node=getSelectedNode();
     if(!node || !workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     const targetId=document.getElementById('relationTargetSelect')?.value || '';
     const edgeType=document.getElementById('relationTypeSelect')?.value || 'dotted';
     const pageScope=document.getElementById('relationScopeSelect')?.value || 'local';
@@ -2040,6 +2099,7 @@ function addEdgeFromSelected(){
 function applyRelationBatchFromSelected(){
     const node=getSelectedNode();
     if(!node || !workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     const rawLines=String(relationBatchText || '').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
     if(!rawLines.length){
         alert(t('relationBatchNoValid'));
@@ -2061,6 +2121,7 @@ function applyRelationBatchFromSelected(){
 }
 function removeEdgeById(edgeId){
     if(!workbookState || workbookState.mode!=='v2') return;
+    pushUndoSnapshot();
     workbookState.edgesRows=workbookState.edgesRows.filter(row=>String(row.EdgeID || row.edgeId || '').trim()!==edgeId);
     rebuildWorkbookStateFromRows();
 }
@@ -2766,6 +2827,8 @@ function drawCanvasPreview(scale=1,forExport=false){
         const isSearchActive=!forExport&&!!searchQuery.trim();
         const isMatch=isSearchActive&&searchMatchIds.has(node.id);
         const isSelected=!forExport&&node.id===selectedNodeId;
+        const isReparentTarget=!forExport&&reparentMode&&reparentDropTargetId===node.id;
+        const isReparentDragged=!forExport&&reparentMode&&draggedNodeId===node.id;
         const inContext=!isSearchActive||searchContextIds.has(node.id);
         const forceExpand=isSearchActive&&node.searchHasMatch;
         if(scale===1) hitBoxes.push({x:cX,y:cY,w:cW,h:cH,node});
@@ -2782,13 +2845,21 @@ function drawCanvasPreview(scale=1,forExport=false){
                 drawNode(ch);
             });
         }
-        ctx.globalAlpha=inContext?1:0.22;
+        ctx.globalAlpha=isReparentDragged ? 0.4 : inContext ? 1 : 0.22;
         ctx.fillStyle=node.bgColor;
-        ctx.strokeStyle=isMatch ? '#F59E0B' : isSelected ? '#0F766E' : tc.border;
-        ctx.lineWidth=(isMatch || isSelected) ? 4 : 2;
-        if(node.roleType==='vacant') ctx.setLineDash([6,4]);
+        ctx.strokeStyle=isReparentTarget ? '#7C3AED' : isMatch ? '#F59E0B' : isSelected ? '#0F766E' : tc.border;
+        ctx.lineWidth=(isReparentTarget || isMatch || isSelected) ? 4 : 2;
+        if(node.roleType==='vacant' || isReparentDragged) ctx.setLineDash([6,4]);
         drawRR(ctx,cX,cY,cW,cH,5); ctx.fill(); ctx.stroke();
         ctx.setLineDash([]);
+        if(isReparentTarget){
+            ctx.globalAlpha=1;
+            ctx.fillStyle='#7C3AED';
+            ctx.font='bold 10px Arial';
+            ctx.textAlign='center';
+            ctx.textBaseline='bottom';
+            ctx.fillText('▼ 移入此節點',cX+cW/2,cY-2);
+        }
 
         if(node.children.length>0){
             ctx.fillStyle=tc.icon; ctx.font='bold 10px Arial';
@@ -2835,6 +2906,7 @@ function handleCanvasClick(e){
                         cancelPreviewRelationPick();
                         break;
                     }
+                    pushUndoSnapshot();
                     const edgeId=upsertEdgeRow({
                         fromNodeId:relationPickState.fromNodeId,
                         toNodeId:box.node.id,
@@ -3343,6 +3415,9 @@ document.addEventListener('DOMContentLoaded',()=>{
             draggingNode=true;
             draggedNodeId=hit.node.id;
             selectedNodeId=hit.node.id;
+            reparentMode=e.shiftKey;
+            reparentDropTargetId=null;
+            pushUndoSnapshot();
             draggedNodeStartOverride=getNodeOverride(workbookState.selectedPageGroup,draggedNodeId) || {offsetX:0,offsetY:0};
             dragSX=e.clientX; dragSY=e.clientY;
             drawCanvasPreview(1);
@@ -3358,6 +3433,16 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
     document.addEventListener('mousemove',e=>{
         if(draggingNode && workbookState && workbookState.mode==='v2'){
+            if(reparentMode){
+                const hit=findHitNode(e.clientX,e.clientY);
+                const hoverId=hit ? hit.node.id : null;
+                const descendants=collectDescendantIds(draggedNodeId);
+                const dragged=workbookState.nodesById.get(draggedNodeId);
+                const validTarget=hoverId && hoverId!==draggedNodeId && !descendants.has(hoverId) && hoverId!==(dragged?.parentId||'');
+                reparentDropTargetId=validTarget ? hoverId : null;
+                drawCanvasPreview(1);
+                return;
+            }
             const deltaX=(e.clientX-dragSX)/zoomScale/PPI;
             const deltaY=(e.clientY-dragSY)/zoomScale/PPI;
             syncLayoutOverrideRow(workbookState.selectedPageGroup,draggedNodeId,(draggedNodeStartOverride.offsetX||0)+deltaX,(draggedNodeStartOverride.offsetY||0)+deltaY);
@@ -3369,6 +3454,15 @@ document.addEventListener('DOMContentLoaded',()=>{
         panX=dragOX+(e.clientX-dragSX); panY=dragOY+(e.clientY-dragSY); applyTransform();
     });
     document.addEventListener('mouseup',()=>{
+        if(draggingNode && reparentMode && reparentDropTargetId && workbookState && workbookState.mode==='v2'){
+            const row=getNodeRowById(draggedNodeId);
+            if(row){
+                row.ParentID=reparentDropTargetId;
+                rebuildWorkbookStateFromRows();
+            }
+        }
+        reparentMode=false;
+        reparentDropTargetId=null;
         draggingNode=false;
         draggedNodeId=null;
         draggedNodeStartOverride=null;
@@ -3377,6 +3471,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
     document.addEventListener('keydown',e=>{
         if(e.key==='Escape') closePreviewContextMenu();
+        if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undoAction(); }
+        if((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))){ e.preventDefault(); redoAction(); }
     });
     w.addEventListener('click',handleCanvasClick);
 });
