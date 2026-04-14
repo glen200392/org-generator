@@ -1836,7 +1836,15 @@ function renderPreviewSelectionBar(){
             <button class="zoom-fit-btn" onclick="addNodeRelative('sibling')">${escapeHtml(t('addSibling'))}</button>
             <button class="zoom-fit-btn" onclick="togglePreviewRelationPick()">${escapeHtml(t(relationPickActive ? 'previewToolbarPickCancel' : 'previewToolbarPickRelation'))}</button>
             <button class="zoom-fit-btn" onclick="deleteSelectedNode()">${escapeHtml(t('deleteNode'))}</button>
-        </div>`;
+        </div>${(()=>{
+            const barEdges=_getNodeRelatedEdges(node.id);
+            if(!barEdges.length) return '';
+            const btns=barEdges.map(edge=>{
+                const edgeId=String(edge.EdgeID||edge.edgeId||'').trim();
+                return `<button class="zoom-fit-btn" style="color:#B91C1C;background:#FEE2E2;" onclick="removeEdgeById('${escapeJs(edgeId)}')">✕ ${_edgeShortLabel(edge)}</button>`;
+            }).join('');
+            return `<div class="editor-actions" style="margin-top:4px;padding-top:4px;border-top:1px dashed #CBD5E1;"><span style="font-size:11px;color:#64748B;font-weight:bold;">${escapeHtml(t('relationTitle'))}：</span>${btns}</div>`;
+        })()}`;
 }
 function closePreviewContextMenu(){
     previewContextMenuState={visible:false,nodeId:null,x:0,y:0};
@@ -1868,7 +1876,12 @@ function renderPreviewContextMenu(){
     }
     const collapseAction=node.children.length ? `<button class="zoom-fit-btn" onclick="handlePreviewContextAction('toggle')">${escapeHtml(t(isNodeCollapsed(node.id) ? 'previewContextExpand' : 'previewContextCollapse'))}</button>` : '';
     const pickAction=`<button class="zoom-fit-btn" onclick="handlePreviewContextAction('pick-relation')">${escapeHtml(t(relationPickState.active && relationPickState.fromNodeId===node.id ? 'previewToolbarPickCancel' : 'previewContextPickRelation'))}</button>`;
-    menu.innerHTML=`<div class="preview-context-title">${escapeHtml(t('previewContextTitle'))}</div><div class="editor-actions"><button class="zoom-fit-btn" onclick="handlePreviewContextAction('seed')">${escapeHtml(t('previewContextSeed'))}</button><button class="zoom-fit-btn" onclick="handlePreviewContextAction('child')">${escapeHtml(t('previewContextAddChild'))}</button><button class="zoom-fit-btn" onclick="handlePreviewContextAction('sibling')">${escapeHtml(t('previewContextAddSibling'))}</button>${pickAction}${collapseAction}<button class="zoom-fit-btn" onclick="handlePreviewContextAction('delete')">${escapeHtml(t('previewContextDelete'))}</button></div>`;
+    const ctxRelatedEdges=_getNodeRelatedEdges(node.id);
+    const ctxEdgeSection=ctxRelatedEdges.length ? `<div class="preview-context-title" style="margin-top:8px;border-top:1px solid #E2E8F0;padding-top:6px;">${escapeHtml(t('relationTitle'))}</div>${ctxRelatedEdges.map(edge=>{
+        const edgeId=String(edge.EdgeID||edge.edgeId||'').trim();
+        return `<button class="zoom-fit-btn" style="color:#B91C1C;background:#FEE2E2;" onclick="closePreviewContextMenu();removeEdgeById('${escapeJs(edgeId)}')">✕ ${_edgeShortLabel(edge)}</button>`;
+    }).join('')}` : '';
+    menu.innerHTML=`<div class="preview-context-title">${escapeHtml(t('previewContextTitle'))}</div><div class="editor-actions"><button class="zoom-fit-btn" onclick="handlePreviewContextAction('seed')">${escapeHtml(t('previewContextSeed'))}</button><button class="zoom-fit-btn" onclick="handlePreviewContextAction('child')">${escapeHtml(t('previewContextAddChild'))}</button><button class="zoom-fit-btn" onclick="handlePreviewContextAction('sibling')">${escapeHtml(t('previewContextAddSibling'))}</button>${pickAction}${collapseAction}<button class="zoom-fit-btn" onclick="handlePreviewContextAction('delete')">${escapeHtml(t('previewContextDelete'))}</button></div>${ctxEdgeSection}`;
     menu.classList.add('open');
     menu.style.left='0px';
     menu.style.top='0px';
@@ -1887,6 +1900,21 @@ function hidePreviewNodeToolbar(){
 function getHitBoxByNodeId(nodeId){
     return hitBoxes.find(box=>box.node.id===nodeId) || null;
 }
+function _getNodeRelatedEdges(nodeId){
+    return (workbookState?.edgesRows || []).filter(edge=>{
+        const fId=String(edge.FromNodeID||edge.fromNodeId||'').trim();
+        const tId=String(edge.ToNodeID||edge.toNodeId||'').trim();
+        return fId===nodeId || tId===nodeId;
+    });
+}
+function _edgeShortLabel(edge){
+    const fId=String(edge.FromNodeID||edge.fromNodeId||'').trim();
+    const tId=String(edge.ToNodeID||edge.toNodeId||'').trim();
+    const fN=workbookState?.nodesById?.get(fId);
+    const tN=workbookState?.nodesById?.get(tId);
+    const edgeType=String(edge.EdgeType||edge.edgeType||'dotted').trim();
+    return `${escapeHtml((fN?.dept||fN?.name||fId).slice(0,8))} → ${escapeHtml((tN?.dept||tN?.name||tId).slice(0,8))} (${escapeHtml(edgeType)})`;
+}
 function renderPreviewNodeToolbar(){
     const toolbar=document.getElementById('previewNodeToolbar');
     if(!toolbar) return;
@@ -1898,7 +1926,12 @@ function renderPreviewNodeToolbar(){
     }
     const relationPickActive=relationPickState.active && relationPickState.fromNodeId===node.id;
     const collapseAction=node.children.length ? `<button type="button" onclick="toggleNodeCollapseById('${escapeJs(node.id)}')">${escapeHtml(t(isNodeCollapsed(node.id) ? 'previewContextExpand' : 'previewContextCollapse'))}</button>` : '';
-    toolbar.innerHTML=`<button type="button" onclick="seedPathComposerFromSelected()">${escapeHtml(t('pathComposerSeed'))}</button><button type="button" onclick="addNodeRelative('child')">${escapeHtml(t('addChild'))}</button><button type="button" onclick="addNodeRelative('sibling')">${escapeHtml(t('addSibling'))}</button><button type="button" class="${relationPickActive ? 'toolbar-warn' : 'toolbar-accent'}" onclick="togglePreviewRelationPick()">${escapeHtml(t(relationPickActive ? 'previewToolbarPickCancel' : 'previewToolbarPickRelation'))}</button>${collapseAction}<button type="button" class="toolbar-danger" onclick="deleteSelectedNode()">${escapeHtml(t('deleteNode'))}</button>`;
+    const relatedEdges=_getNodeRelatedEdges(node.id);
+    const edgeDeleteBtns=relatedEdges.map(edge=>{
+        const edgeId=String(edge.EdgeID||edge.edgeId||'').trim();
+        return `<button type="button" class="toolbar-danger" onclick="removeEdgeById('${escapeJs(edgeId)}')" title="${escapeHtml(t('relationDelete'))}: ${_edgeShortLabel(edge)}">✕ ${_edgeShortLabel(edge)}</button>`;
+    }).join('');
+    toolbar.innerHTML=`<button type="button" onclick="seedPathComposerFromSelected()">${escapeHtml(t('pathComposerSeed'))}</button><button type="button" onclick="addNodeRelative('child')">${escapeHtml(t('addChild'))}</button><button type="button" onclick="addNodeRelative('sibling')">${escapeHtml(t('addSibling'))}</button><button type="button" class="${relationPickActive ? 'toolbar-warn' : 'toolbar-accent'}" onclick="togglePreviewRelationPick()">${escapeHtml(t(relationPickActive ? 'previewToolbarPickCancel' : 'previewToolbarPickRelation'))}</button>${collapseAction}<button type="button" class="toolbar-danger" onclick="deleteSelectedNode()">${escapeHtml(t('deleteNode'))}</button>${edgeDeleteBtns ? `<span style="border-left:1px solid #E2E8F0;margin:0 2px;"></span>${edgeDeleteBtns}` : ''}`;
     toolbar.classList.add('open');
     const wrapper=document.getElementById('previewWrapper');
     const centerX=(box.x + box.w/2) * zoomScale + panX;
