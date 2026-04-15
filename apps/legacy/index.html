@@ -37,7 +37,7 @@
         .file-trigger-btn:hover { background: #EFF6FF; }
         .file-name-label { font-size: 12px; color: #475569; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
         .upload-divider { width: 1px; height: 22px; background: #CBD5E1; flex-shrink: 0; }
-        #logoPreview { max-width: 60px; max-height: 26px; display: none; }
+        #masterStatus { display: block; }
         
         /* 文件語言專屬下拉選單 */
         .doc-lang-select { padding: 4px 8px; border-radius: 4px; border: 1px solid #94A3B8; font-size: 12px; background: white; cursor: pointer; color: #0A192F; font-weight: bold; }
@@ -263,13 +263,13 @@
         </div>
         <div class="upload-divider"></div>
         <div class="upload-item">
-            <span data-i18n="upLogo">🖼️ Logo（選填）</span>
+            <span data-i18n="upPptMaster">🎨 PPT 母片（選填）</span>
             <div class="file-picker-row">
-                <input type="file" class="native-file-input" id="logoUpload" accept="image/png,image/jpeg" onchange="updateFileInputLabel('logoUpload'); handleLogoUpload()">
-                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('logoUpload')" data-i18n="chooseFile">選擇檔案</button>
-                <span class="file-name-label" id="logoUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+                <input type="file" class="native-file-input" id="masterUpload" accept=".pptx" onchange="updateFileInputLabel('masterUpload'); handleMasterUpload()">
+                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('masterUpload')" data-i18n="chooseFile">選擇檔案</button>
+                <span class="file-name-label" id="masterUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
             </div>
-            <img id="logoPreview" alt="logo">
+            <span id="masterStatus" style="font-size:11px;color:#94A3B8;margin-top:2px;display:block;" data-i18n="masterStatusBlank">空白母片</span>
         </div>
         <div class="upload-divider"></div>
         <div class="upload-item">
@@ -490,8 +490,8 @@ let docLang = 'tw';
 const translations = {
     tw: {
         appTitle: "企業組織圖產生器", btnManual: "使用手冊", btnExcelTemplate: "Excel 範本",
-        upExcel: "📁 Excel 資料", upLogo: "🖼️ Logo（選填）", upDocLang: "📄 輸出內容語言",
-        upPptImport: "📎 回讀 PPT", upPdfImport: "📎 回讀 PDF", docLangTw: "繁體中文", docLangEn: "English",
+        upExcel: "📁 Excel 資料", upPptMaster: "🎨 PPT 母片（選填）", upDocLang: "📄 輸出內容語言",
+        masterStatusBlank: "空白母片", upPptImport: "📎 回讀 PPT", upPdfImport: "📎 回讀 PDF", docLangTw: "繁體中文", docLangEn: "English",
         chooseFile: "選擇檔案", noFileSelected: "未選擇任何檔案",
         themeLabel: "🎨 品牌主題", themeDefault: "🎨 選擇色彩主題...",
         themeBlue: "🔵 科技深藍（預設）", themeGray: "⚪ 商務灰", themeOrange: "🟠 活力橘",
@@ -674,8 +674,8 @@ const translations = {
     },
     en: {
         appTitle: "Corporate Org Chart Generator", btnManual: "User Guide", btnExcelTemplate: "Template",
-        upExcel: "📁 Excel Data", upLogo: "🖼️ Logo (Opt)", upDocLang: "📄 Content Lang",
-        upPptImport: "📎 Import PPT", upPdfImport: "📎 Import PDF", docLangTw: "Traditional Chinese", docLangEn: "English",
+        upExcel: "📁 Excel Data", upPptMaster: "🎨 PPT Master (Opt)", upDocLang: "📄 Content Lang",
+        masterStatusBlank: "Blank master", upPptImport: "📎 Import PPT", upPdfImport: "📎 Import PDF", docLangTw: "Traditional Chinese", docLangEn: "English",
         chooseFile: "Choose File", noFileSelected: "No file selected",
         themeLabel: "🎨 Theme", themeDefault: "🎨 Select Theme...",
         themeBlue: "🔵 Tech Blue (Def)", themeGray: "⚪ Biz Gray", themeOrange: "🟠 Warm Orange",
@@ -911,7 +911,7 @@ function updateDynamicLabels(model){
     refreshAllFileInputLabels();
 }
 
-const CUSTOM_FILE_INPUT_IDS=['excelUpload','pptUpload','pdfUpload','logoUpload'];
+const CUSTOM_FILE_INPUT_IDS=['excelUpload','pptUpload','pdfUpload','masterUpload'];
 function triggerFileInput(inputId){
     document.getElementById(inputId)?.click();
 }
@@ -1024,7 +1024,7 @@ function applyThemeAndPreview(){
 // ══ Core ══
 const BASE_CARD_W=1.8,BASE_CARD_H=0.8,BASE_GAP_X=0.4,BASE_GAP_Y=1.0,PPI=100;
 const PAD_X=0.5*PPI,PAD_Y=1.0*PPI;
-let logoBase64=null,logoImg=new Image();
+let masterTemplate=null; // { bgType:'color'|'image', bgColor, bgImageBase64, logoBase64, logoImg }
 let collapsed=new Set(),hitBoxes=[],isExporting=false;
 let lastModel=null,searchQuery='',searchMatchIds=new Set(),searchContextIds=new Set(),searchFocusPending=false;
 let workbookState=null;
@@ -2846,10 +2846,10 @@ function drawCanvasPreview(scale=1,forExport=false){
     ctx.textAlign='left'; ctx.textBaseline='top';
     ctx.fillText(getCurrentCanvasTitle(model), PAD_X, 14);
 
-    if(logoBase64&&logoImg.complete&&logoImg.naturalWidth>0){
-        const maxLW=180,maxLH=55;
-        const lr=Math.min(maxLW/logoImg.naturalWidth,maxLH/logoImg.naturalHeight,1);
-        ctx.drawImage(logoImg,logW-logoImg.naturalWidth*lr-PAD_X,8,logoImg.naturalWidth*lr,logoImg.naturalHeight*lr);
+    if(masterTemplate&&masterTemplate.logoBase64&&masterTemplate.logoImg.complete&&masterTemplate.logoImg.naturalWidth>0){
+        const maxLW=180,maxLH=55,li=masterTemplate.logoImg;
+        const lr=Math.min(maxLW/li.naturalWidth,maxLH/li.naturalHeight,1);
+        ctx.drawImage(li,logW-li.naturalWidth*lr-PAD_X,8,li.naturalWidth*lr,li.naturalHeight*lr);
     }
 
     if(scale===1) hitBoxes=[];
@@ -3030,9 +3030,17 @@ function downloadPDF(){
     pdf.save('OrgChart_HiRes.pdf');
     setTimeout(()=>{ drawCanvasPreview(1,false); isExporting=false; },100);
 }
+function _buildPptMaster(pres){
+    const mt=masterTemplate;
+    const bg=mt ? (mt.bgType==='image' ? {data:mt.bgImageBase64} : {color:mt.bgColor}) : {color:'FFFFFF'};
+    const objs=[];
+    if(mt&&mt.logoBase64) objs.push({image:{x:8.0,y:0.05,w:1.5,h:0.8,data:mt.logoBase64,sizing:{type:'contain'}}});
+    pres.defineSlideMaster({title:'CORP_MASTER',background:bg,objects:objs});
+}
 function generatePPT(){
     if(workbookState && workbookState.mode==='v2'){
         let pres=new PptxGenJS(); pres.layout='LAYOUT_16x9';
+        _buildPptMaster(pres);
         const SW=9.5,SH=4.5;
         const exportMode=getCurrentExportMode();
         const payload=serializeWorkbookPayload();
@@ -3052,9 +3060,8 @@ function generatePPT(){
             const sc=Math.min(1.0,SW/li.totalWidth,SH/tH);
             const CW=BASE_CARD_W*sc,CH=BASE_CARD_H*sc;
             const offX=(10-li.totalWidth*sc)/2,offY=1.2;
-            const pptSlide=pres.addSlide();
+            const pptSlide=pres.addSlide({masterName:'CORP_MASTER'});
             pptSlide.addText(slide.slideTitle || slide.pageGroup,{x:0.5,y:0.3,w:'80%',h:0.8,fontSize:22,bold:true,color:'0A192F'});
-            if(logoBase64&&logoImg.complete) pptSlide.addImage({data:logoBase64,x:8.0,y:0.2,w:1.5,h:0.8,sizing:{type:'contain'}});
             if(encodedPayload){
                 pptSlide.addText(encodedPayload,{x:0.01,y:7.0,w:0.2,h:0.1,fontSize:1,color:'FFFFFF',margin:0});
             }
@@ -3109,6 +3116,7 @@ function generatePPT(){
     const allRoots=buildOrgModel().roots; if(!allRoots.length) return;
     const mode=document.getElementById('pptModeSelect').value;
     let pres=new PptxGenJS(); pres.layout='LAYOUT_16x9';
+    _buildPptMaster(pres);
     const SW=9.5,SH=4.5;
     function renderSlide(nodesToRender,slideTitle,maxLevels){
         const cloned=cloneNodesForExport(nodesToRender);
@@ -3117,9 +3125,8 @@ function generatePPT(){
         const sc=Math.min(1.0,SW/li.totalWidth,SH/tH);
         const CW=BASE_CARD_W*sc,CH=BASE_CARD_H*sc;
         const offX=(10-li.totalWidth*sc)/2,offY=1.2;
-        const slide=pres.addSlide();
+        const slide=pres.addSlide({masterName:'CORP_MASTER'});
         slide.addText(slideTitle,{x:0.5,y:0.3,w:'80%',h:0.8,fontSize:22,bold:true,color:'0A192F'});
-        if(logoBase64&&logoImg.complete) slide.addImage({data:logoBase64,x:8.0,y:0.2,w:1.5,h:0.8,sizing:{type:'contain'}});
         function drawN(node,depth){
             const fx=node.renderX*sc+offX,fy=node.renderY*sc+offY;
             const visCh=depth<maxLevels?node.children:[];
@@ -3204,11 +3211,72 @@ function downloadExcelTemplate(){
 }
 
 // ══ Upload ══
-function handleLogoUpload(){
-    const f=document.getElementById('logoUpload').files[0]; if(!f) return;
-    const r=new FileReader();
-    r.onload=e=>{ logoBase64=e.target.result; document.getElementById('logoPreview').src=logoBase64; document.getElementById('logoPreview').style.display='inline'; logoImg=new Image(); logoImg.onload=()=>drawCanvasPreview(1); logoImg.src=logoBase64; };
-    r.readAsDataURL(f);
+function updateMasterStatus(){
+    const el=document.getElementById('masterStatus'); if(!el) return;
+    if(masterTemplate){
+        const parts=[];
+        if(masterTemplate.bgType==='image') parts.push('背景圖');
+        else if(masterTemplate.bgColor&&masterTemplate.bgColor!=='FFFFFF') parts.push('#'+masterTemplate.bgColor);
+        if(masterTemplate.logoBase64) parts.push('Logo');
+        el.textContent='✓ '+(parts.length ? parts.join(' + ') : '已載入');
+        el.style.color='#059669';
+    } else {
+        el.textContent=t('masterStatusBlank')||'空白母片';
+        el.style.color='#94A3B8';
+    }
+}
+async function handleMasterUpload(){
+    const f=document.getElementById('masterUpload').files[0]; if(!f) return;
+    if(f.size>20*1024*1024){alert(t('fileTooLarge')||'File exceeds 20 MB limit.');return;}
+    try{
+        const zip=await JSZip.loadAsync(await f.arrayBuffer());
+        const mt={bgType:'color',bgColor:'FFFFFF',bgImageBase64:null,logoBase64:null,logoImg:new Image()};
+
+        // --- 解析第一張投影片的背景 ---
+        const slideXml=await zip.files['ppt/slides/slide1.xml']?.async('string');
+        if(slideXml){
+            // 純色背景
+            const solidM=slideXml.match(/<p:bg>[\s\S]*?<a:srgbClr val="([0-9A-Fa-f]{6})"/);
+            if(solidM){mt.bgType='color';mt.bgColor=solidM[1].toUpperCase();}
+            // 圖片背景（blip fill）：解析 rId → 實體路徑
+            const blipM=slideXml.match(/<p:bg[\s\S]*?<a:blip[^>]*r:embed="(rId\d+)"/);
+            if(blipM){
+                const relsXml=await zip.files['ppt/slides/_rels/slide1.xml.rels']?.async('string');
+                if(relsXml){
+                    const relM=relsXml.match(new RegExp('Id="'+blipM[1]+'"[^>]*Target="([^"]+)"'));
+                    if(relM){
+                        const target=relM[1].startsWith('../') ? 'ppt/'+relM[1].slice(3) : relM[1];
+                        const imgData=await zip.files[target]?.async('base64');
+                        if(imgData){
+                            const ext=target.split('.').pop().toLowerCase();
+                            mt.bgType='image';
+                            mt.bgImageBase64='data:image/'+(ext==='jpg'?'jpeg':ext)+';base64,'+imgData;
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 提取媒體圖片，第一張作為 Logo ---
+        const mediaFiles=Object.keys(zip.files)
+            .filter(n=>n.startsWith('ppt/media/')&&/\.(png|jpg|jpeg)$/i.test(n))
+            .sort();
+        if(mediaFiles.length>0){
+            const imgData=await zip.files[mediaFiles[0]].async('base64');
+            const ext=mediaFiles[0].split('.').pop().toLowerCase();
+            mt.logoBase64='data:image/'+(ext==='jpg'?'jpeg':ext)+';base64,'+imgData;
+            mt.logoImg=new Image();
+            mt.logoImg.onload=()=>drawCanvasPreview(1);
+            mt.logoImg.src=mt.logoBase64;
+        }
+
+        masterTemplate=mt;
+        updateMasterStatus();
+        drawCanvasPreview(1);
+    }catch(e){
+        console.error('Master upload error:',e);
+        alert(t('uploadError')||'Failed to read PPT template.');
+    }
 }
 function buildDraftWorkbookFromTexts(sourceLabel, slideGroups){
     const nodesRows=[];
