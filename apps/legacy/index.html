@@ -218,6 +218,47 @@
         .notice-box { background: #F0FDF4; border: 1px solid #86EFAC; border-radius: 7px; padding: 8px 12px; font-size: 12px; color: #166534; margin-bottom: 10px; }
         .dl-btn { display: block; width: 100%; padding: 11px; background: #1B3F6E; color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 8px; }
         .dl-btn:hover { background: #2B63A8; }
+
+        /* ── Excel Drop Zone ── */
+        .excel-drop-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed #94A3B8; border-radius: 10px; padding: 14px 24px; background: #F8FAFC; transition: border-color 0.2s, background 0.2s; cursor: pointer; min-width: 200px; gap: 4px; }
+        .excel-drop-zone:hover { border-color: #0A192F; background: #EFF6FF; }
+        .excel-drop-zone.dragover { border-color: #64FFDA; background: #F0FDF4; border-style: solid; }
+        .excel-drop-zone.has-file { border-color: #059669; background: #F0FDF4; }
+        .drop-icon { font-size: 22px; line-height: 1; }
+        .drop-label { font-size: 13px; font-weight: bold; color: #1A365D; white-space: nowrap; }
+        .drop-hint { font-size: 11px; color: #94A3B8; }
+        .drop-file-name { font-size: 11px; color: #059669; font-weight: bold; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* ── Secondary Uploads (collapsible) ── */
+        .secondary-toggle { background: none; border: none; color: #64748B; font-size: 11px; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .secondary-toggle:hover { color: #0A192F; }
+        .secondary-toggle .arr { transition: transform 0.2s; display: inline-block; }
+        .secondary-toggle.open .arr { transform: rotate(180deg); }
+        .secondary-uploads { display: none; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #E2E8F0; width: 100%; }
+        .secondary-uploads.open { display: flex; }
+        .secondary-item { display: flex; flex-direction: column; gap: 4px; }
+        .secondary-item-label { font-size: 11px; font-weight: bold; color: #64748B; }
+
+        /* ── Export Loading State ── */
+        @keyframes btn-spin { to { transform: rotate(360deg); } }
+        .btn-working { opacity: 0.75; pointer-events: none; }
+        .btn-spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.35); border-top-color: currentColor; border-radius: 50%; animation: btn-spin 0.7s linear infinite; vertical-align: middle; margin-right: 5px; }
+
+        /* ── Auto-preview pending indicator ── */
+        .preview-pending-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #F59E0B; margin-left: 6px; animation: btn-spin 1s linear infinite; vertical-align: middle; }
+
+        /* ── Workflow Steps ── */
+        .workflow-steps { display: flex; align-items: center; margin-bottom: 12px; gap: 0; }
+        .wf-step { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; }
+        .wf-circle { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; transition: background 0.3s; }
+        .wf-circle.idle { background: #E2E8F0; color: #94A3B8; }
+        .wf-circle.active { background: #0A192F; color: #64FFDA; }
+        .wf-circle.done { background: #059669; color: #fff; }
+        .wf-label { font-size: 11px; font-weight: bold; color: #94A3B8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.3s; }
+        .wf-label.active { color: #0A192F; }
+        .wf-label.done { color: #059669; }
+        .wf-line { flex: 1; height: 2px; background: #E2E8F0; margin: 0 6px; transition: background 0.3s; flex-shrink: 0; min-width: 12px; }
+        .wf-line.done { background: #059669; }
     </style>
 </head>
 <body>
@@ -234,50 +275,82 @@
         </div>
     </div>
 
-    <div class="upload-bar">
-        <div class="upload-item">
-            <span data-i18n="upExcel">📁 Excel 資料</span>
-            <div class="file-picker-row">
+    <!-- Workflow Steps -->
+    <div class="workflow-steps">
+        <div class="wf-step">
+            <div class="wf-circle active" id="wfCircle1">1</div>
+            <span class="wf-label active" id="wfLabel1" data-i18n="wfStep1">上傳資料</span>
+        </div>
+        <div class="wf-line" id="wfLine1"></div>
+        <div class="wf-step">
+            <div class="wf-circle idle" id="wfCircle2">2</div>
+            <span class="wf-label idle" id="wfLabel2" data-i18n="wfStep2">調整樣式</span>
+        </div>
+        <div class="wf-line" id="wfLine2"></div>
+        <div class="wf-step">
+            <div class="wf-circle idle" id="wfCircle3">3</div>
+            <span class="wf-label idle" id="wfLabel3" data-i18n="wfStep3">匯出檔案</span>
+        </div>
+    </div>
+
+    <!-- Primary Upload: Excel (drop zone) -->
+    <div class="upload-bar" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <!-- Excel drop zone (primary action) -->
+            <div id="excelDropZone" class="excel-drop-zone" onclick="triggerFileInput('excelUpload')">
                 <input type="file" class="native-file-input" id="excelUpload" accept=".xlsx,.xls" onchange="updateFileInputLabel('excelUpload'); handleExcelUpload()">
-                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('excelUpload')" data-i18n="chooseFile">選擇檔案</button>
-                <span class="file-name-label" id="excelUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+                <span class="drop-icon">📁</span>
+                <span class="drop-label" data-i18n="dropLabel">拖曳 Excel 至此，或點擊選擇</span>
+                <span class="drop-hint" data-i18n="dropHint">.xlsx / .xls · 最大 5 MB</span>
+                <span class="drop-file-name" id="excelDropFileName" style="display:none;"></span>
+            </div>
+            <!-- Or load sample -->
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+                <button class="btn-hd" onclick="loadSample()" data-i18n="btnSample">💡 載入範例資料</button>
+                <!-- Secondary uploads toggle -->
+                <button class="secondary-toggle" id="secondaryToggle" onclick="toggleSecondaryUploads()">
+                    <span data-i18n="moreImport">▸ 更多匯入選項</span><span class="arr">▾</span>
+                </button>
+            </div>
+            <!-- Lang + master status inline -->
+            <div style="display:flex;flex-direction:column;gap:6px;margin-left:auto;align-items:flex-end;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:11px;color:#64748B;font-weight:bold;" data-i18n="upDocLang">輸出語言</span>
+                    <select id="docLangSelect" class="doc-lang-select" onchange="changeDocLang()">
+                        <option value="tw">繁體中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+                <span id="masterStatus" style="font-size:11px;color:#94A3B8;" data-i18n="masterStatusBlank">空白母片</span>
             </div>
         </div>
-        <div class="upload-divider"></div>
-        <div class="upload-item">
-            <span data-i18n="upPptImport">📎 回讀 PPT</span>
-            <div class="file-picker-row">
-                <input type="file" class="native-file-input" id="pptUpload" accept=".pptx" onchange="updateFileInputLabel('pptUpload'); handlePptUpload()">
-                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('pptUpload')" data-i18n="chooseFile">選擇檔案</button>
-                <span class="file-name-label" id="pptUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+
+        <!-- Secondary uploads (collapsible) -->
+        <div class="secondary-uploads" id="secondaryUploads">
+            <div class="secondary-item">
+                <span class="secondary-item-label" data-i18n="upPptImport">📎 回讀 PPT</span>
+                <div class="file-picker-row">
+                    <input type="file" class="native-file-input" id="pptUpload" accept=".pptx" onchange="updateFileInputLabel('pptUpload'); handlePptUpload()">
+                    <button type="button" class="file-trigger-btn" onclick="triggerFileInput('pptUpload')" data-i18n="chooseFile">選擇檔案</button>
+                    <span class="file-name-label" id="pptUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+                </div>
             </div>
-        </div>
-        <div class="upload-divider"></div>
-        <div class="upload-item">
-            <span data-i18n="upPdfImport">📎 回讀 PDF</span>
-            <div class="file-picker-row">
-                <input type="file" class="native-file-input" id="pdfUpload" accept=".pdf" onchange="updateFileInputLabel('pdfUpload'); handlePdfUpload()">
-                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('pdfUpload')" data-i18n="chooseFile">選擇檔案</button>
-                <span class="file-name-label" id="pdfUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+            <div class="secondary-item">
+                <span class="secondary-item-label" data-i18n="upPdfImport">📎 回讀 PDF</span>
+                <div class="file-picker-row">
+                    <input type="file" class="native-file-input" id="pdfUpload" accept=".pdf" onchange="updateFileInputLabel('pdfUpload'); handlePdfUpload()">
+                    <button type="button" class="file-trigger-btn" onclick="triggerFileInput('pdfUpload')" data-i18n="chooseFile">選擇檔案</button>
+                    <span class="file-name-label" id="pdfUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+                </div>
             </div>
-        </div>
-        <div class="upload-divider"></div>
-        <div class="upload-item">
-            <span data-i18n="upPptMaster">🎨 PPT 母片（選填）</span>
-            <div class="file-picker-row">
-                <input type="file" class="native-file-input" id="masterUpload" accept=".pptx" onchange="updateFileInputLabel('masterUpload'); handleMasterUpload()">
-                <button type="button" class="file-trigger-btn" onclick="triggerFileInput('masterUpload')" data-i18n="chooseFile">選擇檔案</button>
-                <span class="file-name-label" id="masterUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+            <div class="secondary-item">
+                <span class="secondary-item-label" data-i18n="upPptMaster">🎨 PPT 母片</span>
+                <div class="file-picker-row">
+                    <input type="file" class="native-file-input" id="masterUpload" accept=".pptx" onchange="updateFileInputLabel('masterUpload'); handleMasterUpload()">
+                    <button type="button" class="file-trigger-btn" onclick="triggerFileInput('masterUpload')" data-i18n="chooseFile">選擇檔案</button>
+                    <span class="file-name-label" id="masterUploadName" data-i18n="noFileSelected">未選擇任何檔案</span>
+                </div>
             </div>
-            <span id="masterStatus" style="font-size:11px;color:#94A3B8;margin-top:2px;display:block;" data-i18n="masterStatusBlank">空白母片</span>
-        </div>
-        <div class="upload-divider"></div>
-        <div class="upload-item">
-            <span data-i18n="upDocLang">📄 輸出內容語言</span>
-            <select id="docLangSelect" class="doc-lang-select" onchange="changeDocLang()">
-                <option value="tw">繁體中文</option>
-                <option value="en">English</option>
-            </select>
         </div>
     </div>
 
@@ -306,7 +379,6 @@
             <option value="styled">Styled PPT</option>
         </select>
         <button class="btn-sample" onclick="toggleLayoutEdit()" id="layoutEditBtn">✋ 版面微調 Off</button>
-        <button class="btn-sample" onclick="loadSample()" data-i18n="btnSample">💡 載入範例資料</button>
     </div>
 
     <div class="collapse-section">
@@ -396,7 +468,7 @@
             <span class="search-summary" id="previewModeSummary"></span>
         </div>
         <div class="search-row">
-            <input type="text" id="searchInput" class="search-input" oninput="handleSearchInput()" />
+            <input type="text" id="searchInput" class="search-input" oninput="handleSearchInput()" data-i18n-placeholder="searchPlaceholder" placeholder="搜尋部門、姓名..." />
             <button class="zoom-fit-btn" onclick="clearSearch()" id="searchClearBtn"></button>
             <span class="search-summary" id="searchSummary"></span>
         </div>
@@ -490,8 +562,11 @@ let docLang = 'tw';
 const translations = {
     tw: {
         appTitle: "企業組織圖產生器", btnManual: "使用手冊", btnExcelTemplate: "Excel 範本",
-        upExcel: "📁 Excel 資料", upPptMaster: "🎨 PPT 母片（選填）", upDocLang: "📄 輸出內容語言",
+        upExcel: "📁 Excel 資料", upPptMaster: "🎨 PPT 母片", upDocLang: "輸出語言",
         masterStatusBlank: "空白母片", upPptImport: "📎 回讀 PPT", upPdfImport: "📎 回讀 PDF", docLangTw: "繁體中文", docLangEn: "English",
+        dropLabel: "拖曳 Excel 至此，或點擊選擇", dropHint: ".xlsx / .xls · 最大 5 MB",
+        moreImport: "更多匯入選項", wfStep1: "上傳資料", wfStep2: "調整樣式", wfStep3: "匯出檔案",
+        searchPlaceholder: "搜尋部門、姓名...",
         chooseFile: "選擇檔案", noFileSelected: "未選擇任何檔案",
         themeLabel: "🎨 品牌主題", themeDefault: "🎨 選擇色彩主題...",
         themeBlue: "🔵 科技深藍（預設）", themeGray: "⚪ 商務灰", themeOrange: "🟠 活力橘",
@@ -674,8 +749,11 @@ const translations = {
     },
     en: {
         appTitle: "Corporate Org Chart Generator", btnManual: "User Guide", btnExcelTemplate: "Template",
-        upExcel: "📁 Excel Data", upPptMaster: "🎨 PPT Master (Opt)", upDocLang: "📄 Content Lang",
+        upExcel: "📁 Excel Data", upPptMaster: "🎨 PPT Master", upDocLang: "Output Lang",
         masterStatusBlank: "Blank master", upPptImport: "📎 Import PPT", upPdfImport: "📎 Import PDF", docLangTw: "Traditional Chinese", docLangEn: "English",
+        dropLabel: "Drag & drop Excel here, or click to select", dropHint: ".xlsx / .xls · Max 5 MB",
+        moreImport: "More import options", wfStep1: "Upload Data", wfStep2: "Customize", wfStep3: "Export",
+        searchPlaceholder: "Search dept, name...",
         chooseFile: "Choose File", noFileSelected: "No file selected",
         themeLabel: "🎨 Theme", themeDefault: "🎨 Select Theme...",
         themeBlue: "🔵 Tech Blue (Def)", themeGray: "⚪ Biz Gray", themeOrange: "🟠 Warm Orange",
@@ -882,6 +960,7 @@ function updateDynamicLabels(model){
     document.title = t('appTitle');
     document.getElementById('searchInput').placeholder = t('searchPlaceholder');
     document.getElementById('searchClearBtn').textContent = t('searchClear');
+    document.getElementById('searchInput').placeholder = t('searchPlaceholder');
     document.getElementById('validationTitle').textContent = t('validationTitle');
     document.getElementById('previewPageLabel').textContent = t('previewPageLabel');
     document.getElementById('editorTitle').textContent = t('editorTitle');
@@ -2828,8 +2907,10 @@ function drawCanvasPreview(scale=1,forExport=false){
         if(scale===1 && !forExport) closePreviewContextMenu();
         if(scale===1 && !forExport) hidePreviewNodeToolbar();
         drawEmptyState(t('emptyCanvas'));
+        if(scale===1&&!forExport) updateWorkflowSteps(1);
         return model;
     }
+    if(scale===1&&!forExport) updateWorkflowSteps(2);
     applyRoleLayoutAdjustments(roots);
     applyLayoutOverrides(roots,model.pageGroup || '',getCurrentExportMode());
     const li=calculateLayout(roots,model.maxLevels||999,forExport);
@@ -3009,7 +3090,7 @@ function downloadPNG(){
     drawCanvasPreview(3,true);
     const a=document.createElement('a'); a.download='OrgChart_HiRes.png';
     a.href=document.getElementById('previewCanvas').toDataURL('image/png',1.0); a.click();
-    setTimeout(()=>{ drawCanvasPreview(1,false); isExporting=false; },100);
+    setTimeout(()=>{ drawCanvasPreview(1,false); isExporting=false; updateWorkflowSteps(3); },100);
 }
 function downloadPDF(){
     if(isExporting) return; isExporting=true;
@@ -3111,6 +3192,7 @@ function generatePPT(){
             });
         });
         pres.writeFile({fileName:'OrgChart_V2_Output.pptx'});
+        updateWorkflowSteps(3);
         return;
     }
     const allRoots=buildOrgModel().roots; if(!allRoots.length) return;
@@ -3169,6 +3251,7 @@ function generatePPT(){
         }
     }
     pres.writeFile({fileName:'OrgChart_Output.pptx'});
+    updateWorkflowSteps(3);
 }
 
 // ══ Excel Template ══
@@ -3278,6 +3361,120 @@ async function handleMasterUpload(){
         alert(t('uploadError')||'Failed to read PPT template.');
     }
 }
+// ── UX Helpers ───────────────────────────────────────────────────────────────
+
+// Workflow step indicator
+function updateWorkflowSteps(step){
+    // step: 1=data loaded, 2=preview drawn, 3=exported
+    const steps=[1,2,3];
+    steps.forEach(s=>{
+        const circle=document.getElementById('wfCircle'+s);
+        const label=document.getElementById('wfLabel'+s);
+        const line=document.getElementById('wfLine'+(s<3?s:null));
+        if(!circle) return;
+        if(s<step){ circle.className='wf-circle done'; circle.textContent='✓'; label.className='wf-label done'; }
+        else if(s===step){ circle.className='wf-circle active'; circle.textContent=s; label.className='wf-label active'; }
+        else{ circle.className='wf-circle idle'; circle.textContent=s; label.className='wf-label idle'; }
+        if(line){ line.className='wf-line'+(s<step?' done':''); }
+    });
+}
+
+// Toggle secondary uploads section
+function toggleSecondaryUploads(){
+    const sec=document.getElementById('secondaryUploads');
+    const btn=document.getElementById('secondaryToggle');
+    const isOpen=sec.classList.contains('open');
+    sec.classList.toggle('open');
+    btn.classList.toggle('open');
+    btn.querySelector('[data-i18n="moreImport"]').textContent=isOpen ? t('moreImport') : (uiLang==='tw'?'收起':'Collapse');
+}
+
+// Excel drop zone: update visual state
+function setExcelDropZoneFile(name){
+    const zone=document.getElementById('excelDropZone');
+    const fn=document.getElementById('excelDropFileName');
+    if(!zone||!fn) return;
+    if(name){ zone.classList.add('has-file'); fn.style.display='block'; fn.textContent='✓ '+name; }
+    else{ zone.classList.remove('has-file'); fn.style.display='none'; fn.textContent=''; }
+    updateWorkflowSteps(name?2:1);
+}
+
+// processExcelFile: shared logic for file input and drag-and-drop
+function processExcelFile(f){
+    if(!f) return;
+    if(f.size>5*1024*1024){ alert(uiLang==='tw'?'⚠️ 檔案過大，請使用 5MB 以內的 Excel':'⚠️ File too large! Max 5MB.'); return; }
+    setExcelDropZoneFile(f.name);
+    const r=new FileReader();
+    r.onload=e=>{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        const hasNodes=findSheetName(wb.SheetNames,'Nodes');
+        const hasSlides=findSheetName(wb.SheetNames,'Slides');
+        if(hasNodes && hasSlides){
+            workbookState=parseWorkbookV2(wb);
+            pathComposerState=[];
+            pathComposerBatchText='';
+            relationBatchText='';
+            relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
+            closePreviewContextMenu();
+            workbookState.selectedEditorSheet='Nodes';
+            ensureSelectedNodeForCurrentSlide();
+            refreshSlideGroupSelect();
+            setTextareaForWorkbook(workbookState);
+            collapsed.clear();
+            clearSearch();
+            const b=document.getElementById('collapseBody'),a=document.getElementById('collapseArrow');
+            if(!b.classList.contains('open')){ b.classList.add('open'); a.classList.add('open'); }
+            applyThemeAndPreview();
+            return;
+        }
+        clearWorkbookState();
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        let out='';
+        rows.forEach(row=>{
+            const lv=row['Level']||row['層級']||'';
+            const dp=row['Dept']||row['部門']||'';
+            const nm=row['Name']||row['姓名']||'';
+            const ti=row['Title']||row['職稱']||'';
+            let colorStr=row['Color']||row['顏色']||row['色碼'];
+            if(colorStr&&typeof colorStr==='number') colorStr='#'+colorStr.toString(16).toUpperCase().padStart(6,'0');
+            if(lv||dp){ out+=[lv,dp,nm,ti,colorStr].filter(x=>x!==undefined&&x!=='').join(', ')+'\n'; }
+        });
+        document.getElementById('dataInput').value=out.trim();
+        drawCanvasPreview(1);
+    };
+    r.readAsArrayBuffer(f);
+}
+
+// Export button loading state
+function withBtnLoading(btnEl,asyncFn){
+    const orig=btnEl.innerHTML;
+    btnEl.innerHTML='<span class="btn-spinner"></span>'+orig;
+    btnEl.classList.add('btn-working');
+    Promise.resolve().then(asyncFn).finally(()=>{
+        btnEl.innerHTML=orig;
+        btnEl.classList.remove('btn-working');
+    });
+}
+
+// Auto-preview debounce (800ms)
+let _autoPreviewTimer=null;
+function scheduleAutoPreview(){
+    clearTimeout(_autoPreviewTimer);
+    const title=document.querySelector('.preview-title');
+    if(title&&!title.querySelector('.preview-pending-dot')){
+        const dot=document.createElement('span');
+        dot.className='preview-pending-dot';
+        dot.id='pendingDot';
+        title.appendChild(dot);
+    }
+    _autoPreviewTimer=setTimeout(()=>{
+        drawCanvasPreview(1);
+        const dot=document.getElementById('pendingDot');
+        if(dot) dot.remove();
+    },800);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function buildDraftWorkbookFromTexts(sourceLabel, slideGroups){
     const nodesRows=[];
     const slidesRows=[];
@@ -3428,52 +3625,7 @@ async function handlePdfUpload(){
 }
 
 function handleExcelUpload(){
-    const f=document.getElementById('excelUpload').files[0]; if(!f) return;
-    if(f.size>5*1024*1024){ alert(uiLang==='tw'?'⚠️ 檔案過大，請使用 5MB 以內的 Excel':'⚠️ File too large! Max 5MB.'); return; }
-    const r=new FileReader();
-    r.onload=e=>{
-        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-        const hasNodes=findSheetName(wb.SheetNames,'Nodes');
-        const hasSlides=findSheetName(wb.SheetNames,'Slides');
-        if(hasNodes && hasSlides){
-            workbookState=parseWorkbookV2(wb);
-            pathComposerState=[];
-            pathComposerBatchText='';
-            relationBatchText='';
-            relationPickState={active:false,fromNodeId:null,edgeType:'dotted',pageScope:'local'};
-            closePreviewContextMenu();
-            workbookState.selectedEditorSheet='Nodes';
-            ensureSelectedNodeForCurrentSlide();
-            refreshSlideGroupSelect();
-            setTextareaForWorkbook(workbookState);
-            collapsed.clear();
-            clearSearch();
-            const b=document.getElementById('collapseBody'),a=document.getElementById('collapseArrow');
-            if(!b.classList.contains('open')){ b.classList.add('open'); a.classList.add('open'); }
-            applyThemeAndPreview();
-            return;
-        }
-        clearWorkbookState();
-        const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        let out='';
-        rows.forEach(row=>{ 
-            const lv=row['Level']||row['層級']||'';
-            const dp=row['Dept']||row['部門']||'';
-            const nm=row['Name']||row['姓名']||'';
-            const ti=row['Title']||row['職稱']||'';
-            let colorStr = row['Color']||row['顏色']||row['色碼'];
-            let color = colorStr ? colorStr.toString().replace('#','') : '';
-            if(color && /^\d+$/.test(color)) color=parseInt(color).toString(16).padStart(6,'0');
-            if(lv!=='') out+=`${lv}, ${dp}, ${nm}, ${ti}${color ? ', '+color : ''}\n`; 
-        });
-        if(!out.trim()){ alert(uiLang==='tw'?'⚠️ 找不到對應欄位！':'⚠️ Columns not matched!'); return; }
-        collapsed.clear(); document.getElementById('dataInput').value=out.trim();
-        clearSearch();
-        const b=document.getElementById('collapseBody'),a=document.getElementById('collapseArrow');
-        if(!b.classList.contains('open')){ b.classList.add('open'); a.classList.add('open'); }
-        applyThemeAndPreview();
-    };
-    r.readAsArrayBuffer(f);
+    processExcelFile(document.getElementById('excelUpload').files[0]);
 }
 
 // ══ Sample & Init ══
@@ -3487,14 +3639,44 @@ function loadSample(){
 
 let debTimer=null;
 document.addEventListener('DOMContentLoaded',()=>{
+    // ── Textarea: auto-preview debounce (800ms) + pending indicator ──
     document.getElementById('dataInput').addEventListener('input',()=>{
-        if(workbookState && workbookState.mode==='v2'){
-            clearWorkbookState();
-        }
-        clearTimeout(debTimer);
-        debTimer=setTimeout(()=>{ drawCanvasPreview(1); refreshDeptSelect(); },500);
+        if(workbookState && workbookState.mode==='v2') clearWorkbookState();
+        scheduleAutoPreview();
+        refreshDeptSelect();
     });
     window.addEventListener('resize',()=>{ clearTimeout(debTimer); debTimer=setTimeout(()=>drawCanvasPreview(1),300); });
+
+    // ── Excel drag-and-drop ──
+    const dropZone=document.getElementById('excelDropZone');
+    if(dropZone){
+        dropZone.addEventListener('dragover',e=>{ e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave',()=>{ dropZone.classList.remove('dragover'); });
+        dropZone.addEventListener('drop',e=>{
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const f=e.dataTransfer.files[0];
+            if(f&&/\.(xlsx|xls)$/i.test(f.name)) processExcelFile(f);
+            else alert(uiLang==='tw'?'請拖入 .xlsx 或 .xls 檔案':'Please drop an .xlsx or .xls file');
+        });
+    }
+
+    // ── Export buttons: loading state ──
+    document.querySelector('.btn-png')?.addEventListener('click',function(e){
+        e.stopImmediatePropagation();
+        withBtnLoading(this,()=>downloadPNG());
+    },true);
+    document.querySelector('.btn-pdf')?.addEventListener('click',function(e){
+        e.stopImmediatePropagation();
+        withBtnLoading(this,()=>downloadPDF());
+    },true);
+    document.querySelector('.btn-ppt')?.addEventListener('click',function(e){
+        e.stopImmediatePropagation();
+        withBtnLoading(this,()=>generatePPT());
+    },true);
+
+    // ── Update workflow step indicator on init ──
+    updateWorkflowSteps(1);
     const w=document.getElementById('previewWrapper');
     w.addEventListener('wheel',e=>{ e.preventDefault(); const r=w.getBoundingClientRect(); zoom(e.deltaY<0?0.1:-0.1,e.clientX-r.left,e.clientY-r.top); },{passive:false});
     w.addEventListener('contextmenu',e=>{
